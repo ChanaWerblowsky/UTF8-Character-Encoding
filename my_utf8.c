@@ -4,12 +4,12 @@
 #include <stdlib.h>
 #include <assert.h>
 
-// encode???
 // add end-of-string flags
 // is strcmp() expecting 2 utf8 encoded strings?
-// should output of decode() be in hex?
 // test functions
-// implement function to convert hex <-> ascii for more than 1 digit
+// use \U in decode when need 3 bytes
+// add informative error messages
+// should result of encode be in ascii or hex?
 
 int my_utf8_encode(unsigned char *input, unsigned char *output);
 int my_utf8_decode(unsigned char *input, unsigned char *output);
@@ -26,6 +26,11 @@ unsigned char *hex_to_ascii(int h);
 int ascii_to_hex(unsigned char *c);
 
 /// TEST FUNCTIONS ///
+
+
+void test_encode(void);
+void test_encode_long_chars(void);
+
 // tests for decode()
 void test_decode(void);
 void test_decode_long_input(void);
@@ -62,13 +67,10 @@ void test_strcat_simple(void);
 
 int main() {
 
-//    char *a = "\u10FF";
-//    my_utf8_encode(input, output);
-
 //    char *input = "אא";
-    unsigned char input[] = "\xF0\x90\x8D\x88" "ldfkj";
-    unsigned char output[20];
-    my_utf8_decode(input, output);
+//    unsigned char input[] = "\xF0\x90\x8D\x88" "ldfkj";
+//    unsigned char output[20];
+//    my_utf8_decode(input, output);
 
 
 //    char *string = "fds한Иאא";
@@ -77,6 +79,10 @@ int main() {
     unsigned char input1[] = "a\xF0\x90\x8D\x88";
     unsigned char output1[10];
     my_utf8_strreverse(input1, output1);
+
+    // test encode()
+    test_encode();
+    test_encode_long_chars();
 
     // test decode()
     test_decode();
@@ -134,11 +140,16 @@ unsigned char hexdigit_to_ascii(int h){
 
 // given a 1 byte hex value, convert it to 2 ascii characters
 unsigned char *hex_to_ascii(int h){
-    int left_digit1 = h >> 4;            // isolate each of the two hex digits in the first hex value
+
+    // isolate each of the two hex digits
+    int left_digit1 = h >> 4;
     int right_digit1 = h - (left_digit1 <<4);
-    unsigned char c1 = hexdigit_to_ascii(left_digit1);  // and convert them to ascii
+
+    // and convert them to ascii
+    unsigned char c1 = hexdigit_to_ascii(left_digit1);
     unsigned char c2 = hexdigit_to_ascii(right_digit1);
 
+    // save result in array
     unsigned char *output = (unsigned char*) malloc(2);
     output[0] = c1;
     output[1] = c2;
@@ -160,7 +171,17 @@ int asciichar_to_hex(unsigned char c){
 }
 
 
-int ascii_to_hex(unsigned char *c){};
+// given 2 ascii characters, converts them to a 1-byte hex value
+int ascii_to_hex(unsigned char *c){
+
+    // convert each char to hex
+    int h1 = asciichar_to_hex(c[0]);
+    int h2 = asciichar_to_hex(c[1]);
+
+    // then move the first hex digit 4 bits to the left and add it to the second one
+    int ans = (h1 << 4) + h2;
+    return ans;
+}
 
 // given the first byte of a utf8-encoded character, returns the number of bytes that it takes up, or 0 if invalid leading byte
 // assumes that the continuation bytes have been checked for validity
@@ -180,39 +201,103 @@ int my_utf8_charsize(unsigned char c){
 // encodes the given unicode codepoint in UTF8
 int my_utf8_encode(unsigned char *input, unsigned char *output)
 {
+    printf("%s\n", input);
+    int j = 0;  // index in output string
+    while (*input != '\0'){
 
-    int length = 10;
-    // code points can be either 1, 2, or 3 bytes long
-    printf("current char str val: %s\n", input);
-    for (int i = 0; i < length; i++){
-        // each time, advancing by 1 byte but not necessarily by one character
-        // encode each character in the string
+        if (input[0] == '\\'){
 
-        printf("current char hex val: 0x%x\n", (unsigned char)input[i]);
+            // if we're at a \u:
+            if (input[1] == 'u'){
+                // get the next 4 characters; convert them to hex:
 
-//         if decimal value of this character is <= 127, it's an ascii
-        if ((unsigned char)input[i] <= 127){
-            output[i] = input[i];
-            continue;
+                // create 2 string consisting of 2 characters each
+                unsigned char first_2_chars[3];
+                first_2_chars[0] = input[2];
+                first_2_chars[1] = input[3];
+                first_2_chars[2] = '\0';
+
+                unsigned char last_2_chars[3];
+                last_2_chars[0] = input[4];
+                last_2_chars[1] = input[5];
+                last_2_chars[2] = '\0';
+
+                // and convert each to a 1-byte hex value
+                int hex_byte1 = ascii_to_hex(first_2_chars);
+                int hex_byte2 = ascii_to_hex(last_2_chars);
+
+                // the codepoint as an int
+                int codepoint = (hex_byte1 << 8) + hex_byte2;
+
+                // determine in which range this codepoint lies; apply correct encoding algorithm:
+
+                // if ascii, just copy it as is into output string
+                if (codepoint >= 0x0000 && codepoint <= 0x007f){
+                    output[j++] = hex_byte2;
+                }
+
+                else if (codepoint >= 0x0080 && codepoint <= 0x07ff){
+                    output[j++] = 0xc0 + ((hex_byte1 << 2) + (hex_byte2 >> 6));
+                    output[j++] = 0x80 + (hex_byte2 & 0x3f);
+                }
+
+                else if (codepoint >= 0x0800 && codepoint <= 0xffff){
+                    output[j++] = 0xe0 + (hex_byte1 >> 4);
+                    output[j++] = 0x80 + ((hex_byte1 & 0x00ff) << 2) + (hex_byte1 >> 6);
+                    output[j++] = 0x80 + (hex_byte2 & 0x3f);
+                }
+                else{
+                    printf("Invalid codepoint: \\u%s%s", first_2_chars, last_2_chars);
+                }
+
+                // move to next character in input string
+                input += 6;
+
+            } else if (input[1] == 'U'){
+
+                // create 3 string consisting of 2 characters each
+                unsigned char first_2_chars[3];
+                first_2_chars[0] = input[2];
+                first_2_chars[1] = input[3];
+                first_2_chars[2] = '\0';
+
+                unsigned char mid_2_chars[3];
+                mid_2_chars[0] = input[4];
+                mid_2_chars[1] = input[5];
+                mid_2_chars[2] = '\0';
+
+                unsigned char last_2_chars[3];
+                last_2_chars[0] = input[6];
+                last_2_chars[1] = input[7];
+                last_2_chars[2] = '\0';
+
+                // and convert each to a 1-byte hex value
+                int hex_byte1 = ascii_to_hex(first_2_chars);
+                int hex_byte2 = ascii_to_hex(mid_2_chars);
+                int hex_byte3 = ascii_to_hex(last_2_chars);
+
+                int codepoint = (hex_byte1 << 16) + (hex_byte2 << 8) + hex_byte1;
+                if (codepoint >= 0x10000 && codepoint <= 0x10ffff) {
+                    output[j++] = 0xf0 + (hex_byte1 >> 2);
+                    output[j++] = 0x80 + ((hex_byte1 << 4) + (hex_byte2 >> 4));
+                    output[j++] = 0x80 + ((hex_byte2 << 2) & 0x3f) + (hex_byte3 >> 6);
+                    output[j++] = 0x80 + (hex_byte3 & 0x3f);
+
+                    // move to next character in input string
+                    input += 8;
+                }
+                else{
+                    printf("Invalid codepoint: \\U%s%s%s", first_2_chars, mid_2_chars, last_2_chars);
+                }
+            }
+            // otherwise, if there's no '\u' and it's an ascii character:
+            else if (input[0] >= 0 && input[0] <= 127){
+                output[j++] = input[0];
+                input++;
+            }
         }
-
-//        else {
-//
-//        }
-        // determine number of bytes that this
-        int num_bytes = 0;
-        if ((int)input[i] > 0 && (int)input[i] <= 0x007F)
-            num_bytes = 1;
-
-        else if ((int)input[i] >= 0x0080 && (int)input[i] <= 0x07FF)
-            num_bytes = 2;
-
-        else if ((int)input[i] >= 0x0800 && (int)input[i] <= 0xFFFF)
-            num_bytes = 3;
-
-        else if ((int)input[i] >= 0x10000 && (int)input[i] <= 0x10FFFF)
-            num_bytes = 4;
     }
+    output[j++] = '\0';
     return 1;
 }
 
@@ -532,6 +617,39 @@ int my_utf8_strreverse(unsigned char *input, unsigned char *output){
 /////// TEST FUNCTIONS /////////
 ////////////////////////////////
 
+void test_encode(void){
+    unsigned char input[] = "\\u05d0\\u05e8\\u05d9\\u05d4";
+    unsigned char output[30];
+
+    my_utf8_encode(input, output);
+
+    unsigned char ans[] = "\xd7\x90\xd7\xa8\xd7\x99\xd7\x94";
+
+    // compare output against correct ans
+    int i = 0;
+    while(output[i] != '\0'){
+        assert(output[i] == ans[i]);
+        i++;
+    }
+}
+
+void test_encode_long_chars(void){
+    unsigned char input[] = "\\U010348";
+    unsigned char output[30];
+
+    my_utf8_encode(input, output);
+
+    unsigned char ans[] = "\xf0\x90\x8d\x88";
+
+    // compare output against correct ans
+    int i = 0;
+    while(output[i] != '\0'){
+        assert(output[i] == ans[i]);
+        i++;
+    }
+}
+
+
 void test_decode(void){
 
     // test Hebrew Arieh
@@ -540,7 +658,7 @@ void test_decode(void){
     my_utf8_decode(input, output);
 
     // correct answer
-    char ans[] = "\\u05d0\\u05e8\\u05d9\\u05d4";
+    unsigned char ans[] = "\\u05d0\\u05e8\\u05d9\\u05d4";
 
     // compare output to correct answer
     int i = 0;
@@ -657,12 +775,14 @@ void test_charat_simple(void){
     unsigned char *output1 = my_utf8_charat(input1, 3);
 
     assert(output1[0] == '4');
+    free(output1);
 
     unsigned char input2[] = "\xD7\x97\xD7\xA0\xD7\x94";     // 3 Hebrew characters total
     unsigned char *output2 = my_utf8_charat(input2, 1);
 
     assert(output2[0] == 0xD7);
     assert(output2[1] == 0xA0);
+    free(output2);
 }
 
 // test charat() with empty input string
@@ -670,12 +790,14 @@ void test_charat_empty_string(void){
     unsigned char input[] = "";
     unsigned char *output = my_utf8_charat(input, 3);
     assert(output == NULL);
+    free(output);
 }
 
 void test_charat_invalid_input(void){
     unsigned char input[] = "\x90\xD8\x01";      // invalid utf8 string
     unsigned char *output = my_utf8_charat(input, 0);
     assert(output == NULL);
+    free(output);
 }
 
 void test_charat_ascii_and_utf8(void){
@@ -694,6 +816,10 @@ void test_charat_ascii_and_utf8(void){
     // ascii character following a utf8 character
     unsigned char *output3 = my_utf8_charat(input, 6);
     assert(*output3 == 'g');
+
+    free(output1);
+    free(output2);
+    free(output3);
 }
 
 /// tests for strcmp()
