@@ -18,9 +18,10 @@ int my_utf8_check(char *string);
 char *my_utf8_charat(char *string, int index);
 int my_utf8_strcmp(char *string1, char *string2);
 int my_utf8_strcat(char *dest, char *src);
+int my_utf8_strreverse(char *input, char *output);
+int my_utf8_charsize(unsigned char c);
 
-
-//// TEST FUNCTIONS
+/// TEST FUNCTIONS ///
 // tests for decode()
 void test_decode(void);
 void test_decode_long_input(void);
@@ -113,6 +114,22 @@ int main() {
 
     test_strcat_simple();
 
+    return 0;
+}
+
+
+// given the first byte of a utf8-encoded character, returns the number of bytes that it takes up, or 0 if invalid leading byte
+// assumes that the continuation bytes have been checked for validity
+int my_utf8_charsize(unsigned char c){
+
+    if (c >= 0x00 && c < 0x80)
+        return 1;
+    if (c >= 0xc0 && c < 0xe0)
+        return 2;
+    if (c >= 0xe0 && c < 0xf0)
+        return 3;
+    if (c >= 0xf0 && c < 0xf8)
+        return 4;
     return 0;
 }
 
@@ -240,15 +257,8 @@ int my_utf8_strlen(char *string)
         length++;
         unsigned char cur_char = (unsigned char)(*string);
 
-        // determine how many bits this character takes up
-        if (cur_char >= 0x00 && cur_char < 0x80)
-            cur_char_len = 1;
-        else if (cur_char >= 0xc0 && cur_char < 0xe0)
-            cur_char_len = 2;
-        else if (cur_char >= 0xe0 && cur_char < 0xf0)
-            cur_char_len = 3;
-        else if (cur_char >= 0xf0 && cur_char < 0xf8)
-            cur_char_len = 4;
+        // determine how many bytes this character takes up
+        cur_char_len = my_utf8_charsize(cur_char);
 
         // move to next character
         string += cur_char_len;
@@ -349,15 +359,8 @@ char *my_utf8_charat(char *string, int index){
     while (cur_pos <= index){
         unsigned char cur_char = (unsigned char)(*string);
 
-        // determine how many bits this character takes up
-        if (cur_char >= 0x00 && cur_char < 0x80)
-            cur_char_len = 1;
-        else if (cur_char >= 0xc0 && cur_char < 0xe0)
-            cur_char_len = 2;
-        else if (cur_char >= 0xe0 && cur_char < 0xf0)
-            cur_char_len = 3;
-        else if (cur_char >= 0xf0 && cur_char < 0xf8)
-            cur_char_len = 4;
+        // determine how many bytes this character takes up
+        cur_char_len = my_utf8_charsize(cur_char);
 
         // move to next character only if we're not already at the desired character
         if (cur_pos < index)
@@ -417,8 +420,33 @@ int my_utf8_strcat(char *dest, char *src){
     return 0;
 }
 
+// reverses a utf8 encoded string
+int my_utf8_strreverse(char *input, char *output){
 
+    // determine length of input (total number of bytes)
+    int length = 0;
+    char *input_ptr = input;
+    while (*input_ptr != '\0'){
+        length++;
+        input_ptr++;
+    }
+
+    // for each char, determine many bytes it takes up --> put it at the rightmost position (minus the char size+1) in output
+    int cur_char_len = 0;
+    int i;
+    for (i = 0; i < length; i += cur_char_len){
+
+        unsigned char cur_char = (unsigned char)(input[i]);
+
+        // determine how many bytes this character takes up
+        cur_char_len = my_utf8_charsize(cur_char);
+    }
+
+}
+
+////////////////////////////////
 /////// TEST FUNCTIONS /////////
+////////////////////////////////
 
 void test_decode(void){
 
@@ -621,10 +649,16 @@ void test_strcat_simple(void){
     char source[] = "that is the question";
     char dest[] = "to utf8 or not \xED\x95\x9C ";
 
+    // assert that there were no errors
     assert(my_utf8_strcat(dest, source) == 0);
 
+    // assert that the correct result was obtained
     char ans[] = "to utf8 or not \xED\x95\x9C that is the question";
-//    assert(dest == ans);
+    int i = 0;
+    while(ans[i] != '\0') {
+        assert(dest[i] == ans[i]);
+        i++;
+    }
 }
 
 
