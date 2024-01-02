@@ -63,8 +63,6 @@ void test_strcat_simple(void);
 int main() {
 
 //    char *a = "\u10FF";
-//    printf("%c\n", *a);
-//    char *output = "aa";
 //    my_utf8_encode(input, output);
 
 //    char *input = "אא";
@@ -75,7 +73,6 @@ int main() {
 
 //    char *string = "fds한Иאא";
 //    int check = my_utf8_check(string);
-//    printf("valid string? %d\n", check);
 
     unsigned char input1[] = "a\xF0\x90\x8D\x88";
     unsigned char output1[10];
@@ -118,24 +115,36 @@ int main() {
     return 0;
 }
 
-// helper functions
-
-
+/// Helper functions
 
 // converts a hex digit to its ascii representation
 unsigned char hexdigit_to_ascii(int h){
 
     unsigned char ans = '\0';
 
-    // if h is between 0x0 and 0x9, add 0x30 to get its ascii representation
+    // if h is between 0x00 and 0x09, add 0x30 to get its ascii representation
     if (h >= 0x00 && h <= 0x09)
         ans = (unsigned char)(h + 0x30);
-
+    // if h is between 0x0a and 0x0f, add 0x57 to get its ascii representation
     else if (h >= 0x0a && h <= 0x0f)
         ans = (unsigned char)(h + 0x57);
 
     return ans;
 }
+
+// given a 1 byte hex value, convert it to 2 ascii characters
+unsigned char *hex_to_ascii(int h){
+    int left_digit1 = h >> 4;            // isolate each of the two hex digits in the first hex value
+    int right_digit1 = h - (left_digit1 <<4);
+    unsigned char c1 = hexdigit_to_ascii(left_digit1);  // and convert them to ascii
+    unsigned char c2 = hexdigit_to_ascii(right_digit1);
+
+    unsigned char *output = (unsigned char*) malloc(2);
+    output[0] = c1;
+    output[1] = c2;
+    return output;
+}
+
 
 // returns the hex value of the given ascii character
 int asciichar_to_hex(unsigned char c){
@@ -150,7 +159,7 @@ int asciichar_to_hex(unsigned char c){
     return ans;
 }
 
-unsigned char *hex_to_ascii(int h){};
+
 int ascii_to_hex(unsigned char *c){};
 
 // given the first byte of a utf8-encoded character, returns the number of bytes that it takes up, or 0 if invalid leading byte
@@ -243,24 +252,17 @@ int my_utf8_decode(unsigned char *input, unsigned char *output){
                 int hex_byte1 = a >> 2;
                 int hex_byte2 = ((a << 6) + b) & 0x00ff;
 
-                // now convert the two hex values to 4 ascii values
-                int left_digit1 = hex_byte1 >> 4;            // isolate each of the two hex digits in the first hex value
-                int right_digit1 = hex_byte1 - (left_digit1 <<4);
-                unsigned char c1 = hexdigit_to_ascii(left_digit1);  // and convert them to ascii
-                unsigned char c2 = hexdigit_to_ascii(right_digit1);
+                // convert the 2 hex bytes into 4 ascii characters
+                unsigned char *ascii1 = hex_to_ascii(hex_byte1);
+                unsigned char *ascii2 = hex_to_ascii(hex_byte2);
 
-                int left_digit2 = hex_byte2 >> 4;            // isolate each of the two hex digits in the second hex value
-                int right_digit2 = hex_byte2 - (left_digit2 <<4);
-                unsigned char c3 = hexdigit_to_ascii(left_digit2);  // and convert them to ascii
-                unsigned char c4 = hexdigit_to_ascii(right_digit2);
+                output[j++] = ascii1[0];
+                output[j++] = ascii1[1];
+                output[j++] = ascii2[0];
+                output[j++] = ascii2[1];
 
-                output[j++] = c1;
-                output[j++] = c2;
-                output[j++] = c3;
-                output[j++] = c4;
-
-//                output[j++] = (unsigned char) (a >> 2);
-//                output[j++] = (unsigned char) ((a << 6) + b);
+                free(ascii1);
+                free(ascii2);
 
             } else if (cur_char >= 0xe0 && cur_char < 0xf0) {
                 cur_char_len = 3;
@@ -273,24 +275,17 @@ int my_utf8_decode(unsigned char *input, unsigned char *output){
                 int hex_byte1 = a + (b >> 2);
                 int hex_byte2 = ((b << 6) + c) & 0x00ff;
 
-                // now convert the two hex values to 4 ascii values
-                int left_digit1 = hex_byte1 >> 4;            // isolate each of the two hex digits in the first hex value
-                int right_digit1 = hex_byte1 - (left_digit1 <<4);
-                unsigned char c1 = hexdigit_to_ascii(left_digit1);  // and convert them to ascii
-                unsigned char c2 = hexdigit_to_ascii(right_digit1);
+                // convert the 2 hex bytes into 4 ascii characters
+                unsigned char *ascii1 = hex_to_ascii(hex_byte1);
+                unsigned char *ascii2 = hex_to_ascii(hex_byte2);
 
-                int left_digit2 = hex_byte2 >> 4;            // isolate each of the two hex digits in the second hex value
-                int right_digit2 = hex_byte2 - (left_digit2 <<4);
-                unsigned char c3 = hexdigit_to_ascii(left_digit2);  // and convert them to ascii
-                unsigned char c4 = hexdigit_to_ascii(right_digit2);
+                output[j++] = ascii1[0];
+                output[j++] = ascii1[1];
+                output[j++] = ascii2[0];
+                output[j++] = ascii2[1];
 
-                output[j++] = c1;
-                output[j++] = c2;
-                output[j++] = c3;
-                output[j++] = c4;
-
-//                output[j++] = (unsigned char) (a + (b >> 2));
-//                output[j++] = (unsigned char) ((b << 6) + c);
+                free(ascii1);
+                free(ascii2);
 
             } else if (cur_char >= 0xf0 && cur_char < 0xf8){
                 cur_char_len = 4;
@@ -303,31 +298,21 @@ int my_utf8_decode(unsigned char *input, unsigned char *output){
                 int hex_byte2 = ((b << 4) + (c >> 2)) & 0x00ff;
                 int hex_byte3 = ((c << 6) + d) & 0x00ff;
 
-                // now convert the three hex values to 6 ascii values
-                int left_digit1 = hex_byte1 >> 4;            // isolate each of the two hex digits in the first hex value
-                int right_digit1 = hex_byte1 - (left_digit1 <<4);
-                unsigned char c1 = hexdigit_to_ascii(left_digit1);  // and convert them to ascii
-                unsigned char c2 = hexdigit_to_ascii(right_digit1);
+                // convert the 3 hex bytes into 6 ascii characters
+                unsigned char *ascii1 = hex_to_ascii(hex_byte1);
+                unsigned char *ascii2 = hex_to_ascii(hex_byte2);
+                unsigned char *ascii3 = hex_to_ascii(hex_byte3);
 
-                int left_digit2 = hex_byte2 >> 4;            // isolate each of the two hex digits in the second hex value
-                int right_digit2 = hex_byte2 - (left_digit2 <<4);
-                unsigned char c3 = hexdigit_to_ascii(left_digit2);  // and convert them to ascii
-                unsigned char c4 = hexdigit_to_ascii(right_digit2);
+                output[j++] = ascii1[0];
+                output[j++] = ascii1[1];
+                output[j++] = ascii2[0];
+                output[j++] = ascii2[1];
+                output[j++] = ascii3[0];
+                output[j++] = ascii3[1];
 
-                int left_digit3 = hex_byte3 >> 4;            // isolate each of the two hex digits in the second hex value
-                int right_digit3 = hex_byte3 - (left_digit3 <<4);
-                unsigned char c5 = hexdigit_to_ascii(left_digit3);  // and convert them to ascii
-                unsigned char c6 = hexdigit_to_ascii(right_digit3);
-
-                output[j++] = c1;
-                output[j++] = c2;
-                output[j++] = c3;
-                output[j++] = c4;
-                output[j++] = c5;
-                output[j++] = c6;
-//                output[j++] = (unsigned char)(a + (b >> 4));
-//                output[j++] = (unsigned char)((b << 4) + (c >> 2));
-//                output[j++] = (unsigned char)((c << 6) + d);
+                free(ascii1);
+                free(ascii2);
+                free(ascii3);
             }
         }
         input += cur_char_len;
