@@ -320,7 +320,7 @@ int my_utf8_encode(unsigned char *input, unsigned char *output)
                         output[j++] = 0x80 + (right_byte & 0x3f);
                     }
 
-                    // value of codepoint is above the greatest unicode codepoint --> terminate the output string
+                    // value of codepoint is above the largest unicode codepoint --> terminate the output string
                     else {
                         printf("Invalid codepoint: \\U%s", codepoint_str);
                         break;
@@ -352,8 +352,11 @@ int my_utf8_decode(unsigned char *input, unsigned char *output){
 
     // first, check that the input string is a valid UTF8 encoded string
     bool invalid = my_utf8_check(input);
-    if (invalid)
+    if (invalid){
+        printf("Trying to decode the invalid utf8 string %s.\n", input);
         return 1;
+    }
+
 
     unsigned char *input_address = input;      // pointer to hold onto starting address of input string
     int cur_char_len = 0;   // number of bytes that a given character takes up
@@ -361,23 +364,20 @@ int my_utf8_decode(unsigned char *input, unsigned char *output){
 
     while (*input != '\0'){
 
-        unsigned char cur_char = *input;
-
         // if it's an ascii char, simply copy it into the output array
-        if (cur_char >= 0x00 && cur_char < 0x80) {
+        if (input[0] >= 0x00 && input[0] < 0x80) {
             cur_char_len = 1;
-            output[j++] = cur_char;
+            output[j++] = input[0];
         }
         else {
             // put in \u to signify that this is a unicode codepoint
             output[j++] = '\\';
-            output[j++] = 'u';
 
-            if (cur_char >= 0xc0 && cur_char < 0xe0) {
+            if (input[0] >= 0xc0 && input[0] < 0xe0) {
                 cur_char_len = 2;   // this char is encoded in two bytes
 
-                unsigned char a = cur_char - 0xc0;
-                unsigned char b = ((unsigned char) input[1] - 0x80);
+                unsigned char a = input[0] - 0xc0;
+                unsigned char b = input[1] - 0x80;
 
                 // result in hex: 2 hex values where each consists of 2 hex digits
                 int hex_byte1 = a >> 2;
@@ -387,6 +387,7 @@ int my_utf8_decode(unsigned char *input, unsigned char *output){
                 unsigned char *ascii1 = hex_to_ascii(hex_byte1);
                 unsigned char *ascii2 = hex_to_ascii(hex_byte2);
 
+                output[j++] = 'u';
                 output[j++] = ascii1[0];
                 output[j++] = ascii1[1];
                 output[j++] = ascii2[0];
@@ -395,11 +396,11 @@ int my_utf8_decode(unsigned char *input, unsigned char *output){
                 free(ascii1);
                 free(ascii2);
 
-            } else if (cur_char >= 0xe0 && cur_char < 0xf0) {
+            } else if (input[0] >= 0xe0 && input[0] < 0xf0) {
                 cur_char_len = 3;
 
                 // first byte of decoded string consists of last four bits in first byte of encoded string concatenated with its middle 4 bits
-                int a = (cur_char - 0xe0) << 4;
+                int a = (input[0] - 0xe0) << 4;
                 int b = (input[1] - 0x80);
                 int c = (input[2] - 0x80);
 
@@ -410,6 +411,7 @@ int my_utf8_decode(unsigned char *input, unsigned char *output){
                 unsigned char *ascii1 = hex_to_ascii(hex_byte1);
                 unsigned char *ascii2 = hex_to_ascii(hex_byte2);
 
+                output[j++] = 'u';
                 output[j++] = ascii1[0];
                 output[j++] = ascii1[1];
                 output[j++] = ascii2[0];
@@ -418,9 +420,9 @@ int my_utf8_decode(unsigned char *input, unsigned char *output){
                 free(ascii1);
                 free(ascii2);
 
-            } else if (cur_char >= 0xf0 && cur_char < 0xf8){
+            } else if (input[0] >= 0xf0 && input[0] < 0xf8){
                 cur_char_len = 4;
-                int a = (cur_char - 0xf0) << 2;
+                int a = (input[0] - 0xf0) << 2;
                 int b = (input[1] - 0x80);
                 int c = (input[2] - 0x80);
                 int d = (input[3] - 0x80);
@@ -434,6 +436,9 @@ int my_utf8_decode(unsigned char *input, unsigned char *output){
                 unsigned char *ascii2 = hex_to_ascii(hex_byte2);
                 unsigned char *ascii3 = hex_to_ascii(hex_byte3);
 
+                output[j++] = 'U';
+                output[j++] = '0';
+                output[j++] = '0';
                 output[j++] = ascii1[0];
                 output[j++] = ascii1[1];
                 output[j++] = ascii2[0];
@@ -473,7 +478,7 @@ int my_utf8_strlen(unsigned char *string)
     return length;
 }
 
-
+// returns 0 if the input string is a valid utf8-encoded string, and 1 otherwise
 int my_utf8_check(unsigned char *string) {
 
     // first determine the number of bytes in the input string
@@ -487,56 +492,43 @@ int my_utf8_check(unsigned char *string) {
     // then loop through string again, checking whether each character is valid
     int cur_char_len = 0;
     for(int i = 0; i < length; i+= cur_char_len){
-        unsigned int bytes_rem = length - i - 1;            // number of bytes that remain in the string after this one
-        unsigned char cur_char = string[i];   // cast character to an unsigned char for easy hex comparison
-        unsigned char next_char;
-        unsigned char next_next_char;
-        unsigned char next_next_next_char;
+        unsigned int bytes_rem = length - i - 1;   // number of bytes that remain in the string after this one
 
-        // Range #1 (less than 0x08 --> ascii character
-        if (cur_char < 0x80) {
+        // Range #1 (less than 0x08 --> ascii character)
+        if (string[i] < 0x80) {
             cur_char_len = 1;
         }
 
-        // if not an ascii character and no bytes follow, it's an invalid utf8 string
-        else if (cur_char >= 0x80 && bytes_rem == 0)
-            return 1;
-
         // Range #2
-        else if (cur_char >= 0xc0 && cur_char < 0xe0) {
+        else if (string[i] >= 0xc0 && string[i] < 0xe0) {
 
-            next_char = string[i+1];
-            if (!(next_char >= 0x80 && next_char < 0xc0))
+            // if the following byte is not a valid continuation byte
+            if (!(string[i+1] >= 0x80 && string[i+1] < 0xc0))
                 return 1;
 
             cur_char_len = 2;
         }
 
         // Range #3
-        else if (cur_char >= 0xe0 && cur_char < 0xf0) {
+        else if (string[i] >= 0xe0 && string[i] < 0xf0) {
             if (bytes_rem < 2)
                 return 1;
 
-            // otherwise...
-            next_char = string[i+1];
-            next_next_char = string[i+2];
-            if (!(next_char >= 0x80 && next_char < 0xc0 && next_next_char >= 0x80 && next_next_char < 0xc0))
+            // if the following 2 bytes are not valid continuation bytes
+            if (!(string[i+1] >= 0x80 && string[i+1] < 0xc0 && string[i+2] >= 0x80 && string[i+2] < 0xc0))
                 return 1;
 
             cur_char_len = 3;
         }
 
         // Range #4
-        else if (cur_char >= 0xf0 && cur_char < 0xf8) {
+        else if (string[i] >= 0xf0 && string[i] < 0xf8) {
             if (bytes_rem < 3)
                 return 1;
 
-            // otherwise...
-            next_char = string[i+1];
-            next_next_char = string[i+2];
-            next_next_next_char = string[i+3];
-            if (!(next_char >= 0x80 && next_char < 0xc0 && next_next_char >= 0x80 && next_next_char < 0xc0 &&
-                  next_next_next_char >= 0x80 && next_next_next_char < 0xc0))
+            // if the following 3 bytes are not valid continuation bytes
+            if (!(string[i+1] >= 0x80 && string[i+1] < 0xc0 && string[i+2] >= 0x80 && string[i+2] < 0xc0 &&
+                    string[i+3] >= 0x80 && string[i+3] < 0xc0))
                 return 1;
 
             cur_char_len = 4;
@@ -743,7 +735,7 @@ void test_decode_long_input(void){
     my_utf8_decode(input, output);  // call decode()
 
     // correct answer
-    char ans[] = "abcdefg\\u05d012345678\\u05e8\\u010348\\u05d9\\u05d4";
+    char ans[] = "abcdefg\\u05d012345678\\u05e8\\U00010348\\u05d9\\u05d4";
 
     // compare output to correct answer
     int i = 0;
