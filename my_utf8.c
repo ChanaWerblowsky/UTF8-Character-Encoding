@@ -249,11 +249,20 @@ int my_utf8_encode(unsigned char *input, unsigned char *output)
     while (*input != '\0'){
 
         if (input[0] == '\\') {
-            if (input[1] == 'u') {       // if we're at a \u:
 
-                // make sure there are at least 4 characters following
+            int num_digits = 0;
+            if (input[1] == 'u')
+                num_digits = 4;
+
+            else if (input[1] == 'U')
+                num_digits = 8;
+
+            // if we're at a \u or \U:
+            if (num_digits != 0) {
+
+                // make sure there are at least 4 or at least 8 characters following
                 bool enough_chars = true;
-                for (int i = 2; i < 6; i++)
+                for (int i = 2; i < num_digits+2; i++)
                     if (input[i] == '\0') {
                         printf("Incomplete unicode character %s!\n", input);
                         enough_chars = false;
@@ -261,18 +270,17 @@ int my_utf8_encode(unsigned char *input, unsigned char *output)
                 if (!enough_chars)
                     break;
 
-                // if there are four characters following:
-
-                // create a string consisting of these 4 characters
-                unsigned char codepoint_chars[5];
+                // if there are enough characters following:
+                // create a string consisting of the following 4 or 8 characters
+                unsigned char codepoint_str[num_digits+1];
                 int i;
-                for (i = 0; i < 4; i++){
-                    codepoint_chars[i] = input[i + 2];
+                for (i = 0; i < num_digits; i++){
+                    codepoint_str[i] = input[i + 2];
                 }
-                codepoint_chars[i] = '\0';
+                codepoint_str[i] = '\0';
 
-                // convert the series of characters into a 'matching' int
-                int codepoint = ascii_to_hex(codepoint_chars);
+                // convert the string into a 'matching' int
+                int codepoint = ascii_to_hex(codepoint_str);
 
                 // if invalid character following the \u, terminate the output string
                 if (codepoint == -1){
@@ -280,92 +288,56 @@ int my_utf8_encode(unsigned char *input, unsigned char *output)
                     break;
                 }
 
-                // determine in which range this codepoint lies; apply correct encoding algorithm:
+                if (num_digits == 4){
+                    // determine in which range this codepoint lies; apply correct encoding algorithm:
+                    int left_byte = codepoint >> 8;
+                    int right_byte = codepoint & 0x00ff;
 
-                // if it's an ascii char, just copy it as is into output string
-                int left_byte = codepoint >> 8;
-                int right_byte = codepoint & 0x00ff;
-                if (codepoint >= 0x0000 && codepoint <= 0x007f) {
-                    output[j++] = right_byte;
-                }
-                else if (codepoint >= 0x0080 && codepoint <= 0x07ff) {
-                    output[j++] = 0xc0 + ((left_byte << 2) + (right_byte >> 6));
-                    output[j++] = 0x80 + (right_byte & 0x3f);
-                }
-                else if (codepoint >= 0x0800 && codepoint <= 0xffff) {
-                    output[j++] = 0xe0 + (left_byte >> 4);
-                    output[j++] = 0x80 + ((left_byte & 0x00ff) << 2) + (left_byte >> 6);
-                    output[j++] = 0x80 + (right_byte & 0x3f);
-                }
-
-                // move to next character in input string
-                input += 6;
-            }
-            else if (input[1] == 'U') {
-
-                // make sure there are at least 8 characters following
-                bool enough_chars = true;
-                for (int i = 2; i < 10; i++)
-                    if (input[i] == '\0') {
-                        printf("Incomplete unicode character %s!\n", input);
-                        enough_chars = false;
+                    // if it's an ascii char, just copy it as is into output string
+                    if (codepoint >= 0x0000 && codepoint <= 0x007f) {
+                        output[j++] = right_byte;
                     }
-                if (!enough_chars)
-                    break;
-
-                // create 3 strings consisting of 2 characters each
-                unsigned char first_2_chars[3];
-                first_2_chars[0] = input[2];
-                first_2_chars[1] = input[3];
-                first_2_chars[2] = '\0';
-
-                unsigned char mid_2_chars[3];
-                mid_2_chars[0] = input[4];
-                mid_2_chars[1] = input[5];
-                mid_2_chars[2] = '\0';
-
-                unsigned char last_2_chars[3];
-                last_2_chars[0] = input[6];
-                last_2_chars[1] = input[7];
-                last_2_chars[2] = '\0';
-
-                // and convert each to a 1-byte hex value
-                int hex_byte1 = ascii_to_hex(first_2_chars);
-                int hex_byte2 = ascii_to_hex(mid_2_chars);
-                int hex_byte3 = ascii_to_hex(last_2_chars);
-
-                // if invalid character following the \u, terminate the output string
-                if (hex_byte1 == -1 || hex_byte2 == -1 || hex_byte3 == -1) {
-                    printf("Invalid character following \\U.\n");
-                    break;
+                    else if (codepoint >= 0x0080 && codepoint <= 0x07ff) {
+                        output[j++] = 0xc0 + ((left_byte << 2) + (right_byte >> 6));
+                        output[j++] = 0x80 + (right_byte & 0x3f);
+                    }
+                    else if (codepoint >= 0x0800 && codepoint <= 0xffff) {
+                        output[j++] = 0xe0 + (left_byte >> 4);
+                        output[j++] = 0x80 + ((left_byte & 0x00ff) << 2) + (left_byte >> 6);
+                        output[j++] = 0x80 + (right_byte & 0x3f);
+                    }
                 }
 
-                int codepoint = (hex_byte1 << 16) + (hex_byte2 << 8) + hex_byte1;
-                if (codepoint >= 0x10000 && codepoint <= 0x10ffff) {
-                    output[j++] = 0xf0 + (hex_byte1 >> 2);
-                    output[j++] = 0x80 + ((hex_byte1 << 4) + (hex_byte2 >> 4));
-                    output[j++] = 0x80 + ((hex_byte2 << 2) & 0x3f) + (hex_byte3 >> 6);
-                    output[j++] = 0x80 + (hex_byte3 & 0x3f);
+                else {  // num_digits == 8
+                    int left_byte = codepoint >> 16;
+                    int mid_byte = (codepoint >> 8) & 0x0000ff;
+                    int right_byte = codepoint & 0x0000ff;
 
-                    // move to next character in input string
-                    input += 8;
-                }
+                    if (codepoint >= 0x10000 && codepoint <= 0x10ffff) {
+                        output[j++] = 0xf0 + (left_byte >> 2);
+                        output[j++] = 0x80 + ((left_byte << 4) + (mid_byte >> 4));
+                        output[j++] = 0x80 + ((mid_byte << 2) & 0x3f) + (right_byte >> 6);
+                        output[j++] = 0x80 + (right_byte & 0x3f);
+                    }
 
-                // value of codepoint is too large --> terminate the output string
-                else {
-                    printf("Invalid codepoint: \\U%s%s%s", first_2_chars, mid_2_chars, last_2_chars);
-                    break;
+                    // value of codepoint is above the greatest unicode codepoint --> terminate the output string
+                    else {
+                        printf("Invalid codepoint: \\U%s", codepoint_str);
+                        break;
+                    }
                 }
+                // move to next character in input string
+                input += num_digits+2;
             }
         }
-
-        // otherwise, if there's no '\u' and it's an ascii character:
+        // if here we're not at a '\u' or '\U'
+        // if the current char is an ascii character:
         else if (input[0] >= 0 && input[0] <= 127){
             output[j++] = input[0];
             input++;
         }
 
-        // otherwise, non-ascii char without a preceding \u --> terminate the output string
+        // if not, missing preceding \u --> terminate the output string
         else{
             printf("Missing \\u before non-ascii character %c!\n", input[0]);
             break;
