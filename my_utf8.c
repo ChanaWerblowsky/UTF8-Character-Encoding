@@ -13,6 +13,7 @@ int my_utf8_encode(unsigned char *input, unsigned char *output);
 int my_utf8_decode(unsigned char *input, unsigned char *output);
 int my_utf8_strlen(unsigned char *string);
 int my_utf8_check(unsigned char *string);
+int my_utf8_check_codepoint(unsigned int codepoint);
 unsigned char *my_utf8_charat(unsigned char *string, int index);
 int my_utf8_strcmp(unsigned char *string1, unsigned char *string2);
 int my_utf8_strcat(unsigned char *dest, unsigned char *src);
@@ -21,7 +22,7 @@ int my_utf8_charsize(unsigned char c);
 unsigned char hexdigit_to_ascii(int h);
 int asciichar_to_hex(unsigned char c);
 unsigned char *hex_to_ascii(int h);
-int ascii_to_hex(unsigned char *c);
+unsigned int ascii_to_hex(unsigned char *c);
 
 /// TEST FUNCTIONS ///
 
@@ -181,7 +182,7 @@ int asciichar_to_hex(unsigned char c){
 
 
 // given a series of ascii characters, converts them to 'matching' hex int
-int ascii_to_hex(unsigned char *c){
+unsigned int ascii_to_hex(unsigned char *c){
 
     // length of input string:
     int length = 0;
@@ -208,7 +209,7 @@ int ascii_to_hex(unsigned char *c){
     }
 
     // finally, combine each of the bytes into 1 hex int
-    int ans = 0;
+    unsigned int ans = 0;
     int num_shifts;
     for(int k = 0; k < num_bytes; k++){
         num_shifts = (num_bytes - k - 1) * 8;
@@ -217,6 +218,7 @@ int ascii_to_hex(unsigned char *c){
 
     return ans;
 }
+
 
 // given the first byte of a utf8-encoded character, returns the number of bytes that it takes up, or 0 if invalid leading byte
 // assumes that the continuation bytes have been checked for validity
@@ -230,6 +232,27 @@ int my_utf8_charsize(unsigned char c){
         return 3;
     if (c >= 0xf0 && c < 0xf8)
         return 4;
+    return 0;
+}
+
+int my_utf8_check_codepoint(unsigned int codepoint){
+
+    if (codepoint < 0xa0) {
+        if (codepoint != 0x0024 && codepoint != 0x0040 && codepoint != 0x0060) {
+            printf("Invalid universal character \\u%x - less than 0xa0\n", codepoint);
+            return 1;
+        }
+        else
+            return 0;
+    }
+    if (codepoint >= 0xd800 && codepoint <= 0xdfff) {
+        printf("Invalid universal character \\u%x - between U+d800 and U+dfff\n", codepoint);
+        return 1;
+    }
+    if (codepoint > 0x10ffff){
+        printf("Invalid universal character \\u%x - greater than U+10ffff\n", codepoint);
+        return 1;
+    }
     return 0;
 }
 
@@ -274,7 +297,7 @@ int my_utf8_encode(unsigned char *input, unsigned char *output)
                 codepoint_str[i] = '\0';
 
                 // convert the string into a 'matching' int
-                int codepoint = ascii_to_hex(codepoint_str);
+                unsigned int codepoint = ascii_to_hex(codepoint_str);
 
                 // if invalid character following the \u, terminate the output string
                 if (codepoint == -1){
@@ -283,36 +306,27 @@ int my_utf8_encode(unsigned char *input, unsigned char *output)
                     break;
                 }
 
+                // check that the codepoint is within a valid range
+                bool invalid_codepoint = my_utf8_check_codepoint(codepoint);
+                if (invalid_codepoint){
+                    success = false;
+                    break;
+                }
+
                 if (num_digits == 4){
                     // determine in which range this codepoint lies; apply correct encoding algorithm:
-                    int left_byte = codepoint >> 8;     // isolate the two hex bytes
-                    int right_byte = codepoint & 0x00ff;
+                    unsigned int left_byte = codepoint >> 8;     // isolate the two hex bytes
+                    unsigned int right_byte = codepoint & 0x00ff;
 
                     // if less than U+00a0, only U+0024, U+0040, and U+0060 are valid
-                    if (codepoint >= 0x0000 && codepoint <= 0x007f) {
-                        if (codepoint != 0x0024 && codepoint != 0x0040 && codepoint != 0x0060){
-                            success = false;
-                            printf("Invalid universal character \\u%s - less than 0xa0\n", codepoint_str);
-                            break;
-                        }
+                    if (codepoint <= 0x007f) {
                         output[j++] = right_byte;
                     }
-                    else if (codepoint >= 0x0080 && codepoint <= 0x07ff) {
-
-                        if (codepoint < 0xa0){  // if within invalid range
-                            success = false;
-                            printf("Invalid universal character \\u%s - less than 0xa0\n", codepoint_str);
-                            break;
-                        }
+                    else if (codepoint <= 0x07ff) {
                         output[j++] = 0xc0 + ((left_byte << 2) + (right_byte >> 6));
                         output[j++] = 0x80 + (right_byte & 0x3f);
                     }
-                    else if (codepoint >= 0x0800 && codepoint <= 0xffff) {  // if within invalid range
-                        if (codepoint >= 0xd800 && codepoint <= 0xdfff){
-                            success = false;
-                            printf("Invalid universal character \\u%s - within range 0xd800-0xdfff\n", codepoint_str);
-                            break;
-                        }
+                    else if (codepoint <= 0xffff) {  // if within invalid range
                         output[j++] = 0xe0 + (left_byte >> 4);
                         output[j++] = 0x80 + ((left_byte & 0x0f) << 2) + (right_byte >> 6);
                         output[j++] = 0x80 + (right_byte & 0x3f);
@@ -320,22 +334,15 @@ int my_utf8_encode(unsigned char *input, unsigned char *output)
                 }
 
                 else {  // num_digits == 8
-                    int left_byte = codepoint >> 16;
-                    int mid_byte = (codepoint >> 8) & 0x0000ff;
-                    int right_byte = codepoint & 0x0000ff;
+                    unsigned int left_byte = codepoint >> 16;
+                    unsigned int mid_byte = (codepoint >> 8) & 0x0000ff;
+                    unsigned int right_byte = codepoint & 0x0000ff;
 
                     if (codepoint >= 0x10000 && codepoint <= 0x10ffff) {
                         output[j++] = 0xf0 + (left_byte >> 2);
                         output[j++] = 0x80 + ((left_byte << 4) + (mid_byte >> 4));
                         output[j++] = 0x80 + ((mid_byte << 2) & 0x3f) + (right_byte >> 6);
                         output[j++] = 0x80 + (right_byte & 0x3f);
-                    }
-
-                    // value of codepoint is above the largest unicode codepoint --> terminate the output string
-                    else{
-                        success = false;
-                        printf("Invalid universal character \\u%s - greater than 0x10FFFF\n", codepoint_str);
-                        break;
                     }
                 }
 
@@ -677,7 +684,7 @@ void test_encode(unsigned char *input, unsigned char *output, unsigned char *exp
     bool passed = true;
     while(output[i] != '\0' && expected[i] != '\0'){
         if (output[i] != expected[i]){
-            printf("%s: TEST FAILED! ", test_name);
+            printf("***TEST FAILED: %s. ", test_name);
             if (encode_successful == 1)
                 printf("Invalid input %s dealt with incorrectly.\n", input);
             else
@@ -689,7 +696,7 @@ void test_encode(unsigned char *input, unsigned char *output, unsigned char *exp
         i++;
     }
     if (passed){
-        printf("%s: TEST PASSED. ", test_name);
+        printf("***TEST PASSED: %s. ", test_name);
         if (encode_successful == 1)
             printf("Invalid input %s dealt with correctly.\n", input);
         else
@@ -706,14 +713,14 @@ void testall_encode(){
     unsigned char input1[] = "\\u05d0\\u05e8\\u05d9\\u05d4";
     unsigned char output1[10];
     unsigned char expected1[] = "\u05d0\u05e8\u05d9\u05d4";
-    test_encode(input1, output1, expected1, "Encode - simple input");
+    test_encode(input1, output1, expected1, "Encode - Simple");
     printf("\n");
 
     // 2. Range 1 codepoint
     unsigned char input2[] = "\\u0024";
     unsigned char output2[10];
     unsigned char expected2[] = "\u0024";
-    test_encode(input2, output2, expected2, "Encode - Range 1 codepoint");
+    test_encode(input2, output2, expected2, "Encode - Range 1 Codepoint");
     printf("\n");
 
 
@@ -721,7 +728,7 @@ void testall_encode(){
     unsigned char input3[] = "\\u00A3";
     unsigned char output3[10];
     unsigned char expected3[] = "\u00A3";
-    test_encode(input3, output3, expected3, "Encode - Range 2 codepoint");
+    test_encode(input3, output3, expected3, "Encode - Range 2 Codepoint");
     printf("\n");
 
 
@@ -729,7 +736,7 @@ void testall_encode(){
     unsigned char input4[] = "\\ud55c";
     unsigned char output4[10];
     unsigned char expected4[] = "\ud55c";
-    test_encode(input4, output4, expected4, "Encode - Range 3 codepoint");
+    test_encode(input4, output4, expected4, "Encode - Range 3 Codepoint");
     printf("\n");
 
 
@@ -737,7 +744,7 @@ void testall_encode(){
     unsigned char input5[] = "\\U00010348";
     unsigned char output5[10];
     unsigned char expected5[] = "\xf0\x90\x8d\x88";
-    test_encode(input5, output5, expected5, "Encode - Range 4 codepoint");
+    test_encode(input5, output5, expected5, "Encode - Range 4 Codepoint");
     printf("\n");
 
 
@@ -745,7 +752,7 @@ void testall_encode(){
     unsigned char input6[] = "\\ug0187";
     unsigned char output6[10];
     unsigned char expected6[] = "\0";
-    test_encode(input6, output6, expected6, "Encode - non-hex in codepoint");
+    test_encode(input6, output6, expected6, "Encode - Non-hex in Codepoint");
     printf("\n");
 
 
@@ -753,7 +760,7 @@ void testall_encode(){
     unsigned char input7[] = "\\u018";
     unsigned char output7[10];
     unsigned char expected7[] = "\0";
-    test_encode(input7, output7, expected7, "Encode - incomplete codepoint at beginning");
+    test_encode(input7, output7, expected7, "Encode - Incomplete Codepoint at Beginning");
     printf("\n");
 
 
@@ -761,7 +768,7 @@ void testall_encode(){
     unsigned char input8[] = "\\uabcd\\u18";
     unsigned char output8[10];
     unsigned char expected8[] = "\uabcd";
-    test_encode(input8, output8, expected8, "Encode - incomplete codepoint at end");
+    test_encode(input8, output8, expected8, "Encode - Incomplete Codepoint at End");
     printf("\n");
 
 
@@ -769,19 +776,29 @@ void testall_encode(){
     unsigned char input9[] = "€018";
     unsigned char output9[10];
     unsigned char expected9[] = "\0";
-    test_encode(input9, output9, expected9, "Encode - missing '\\u'");
+    test_encode(input9, output9, expected9, "Encode - Missing '\\u'");
     printf("\n");
 
-    // 10. within protected range (less than 0xa0 and not one of the exceptions)
+    // 10. codepoint in protected range (less than 0xa0 and not one of the exceptions)
     unsigned char input10[] = "\\u0035";
     unsigned char output10[10];
     unsigned char expected10[] = "\0";
-    test_encode(input10, output10, expected10, "Encode - invalid codepoint");
+    test_encode(input10, output10, expected10, "Encode - Codepoint Too Low");
     printf("\n");
 
-    // 11. within protected range (between 0xd800 and 0xdfff)
+    // 11. codepoint in protected range (between 0xd800 and 0xdfff)
+    unsigned char input11[] = "\\ud955";
+    unsigned char output11[10];
+    unsigned char expected11[] = "\0";
+    test_encode(input11, output11, expected11, "Encode - Codepoint in Protected Range");
+    printf("\n");
 
-    // 12. too large
+    // 12. codepoint too large
+    unsigned char input12[] = "\\Uffd55955";
+    unsigned char output12[10];
+    unsigned char expected12[] = "\0";
+    test_encode(input12, output12, expected12, "Encode - Codepoint Too Large");
+    printf("\n");
 
     printf("##############################################################################");
 }
