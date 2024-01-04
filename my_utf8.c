@@ -14,9 +14,9 @@ int my_utf8_strcmp(unsigned char *string1, unsigned char *string2);
 int my_utf8_strcat(unsigned char *dest, unsigned char *src);
 int my_utf8_strreverse(unsigned char *input, unsigned char *output);
 int my_utf8_charsize(unsigned char c);
-unsigned char hexdigit_to_ascii(int h);
+unsigned char hexdigit_to_ascii(unsigned int h);
 int asciichar_to_hex(unsigned char c);
-unsigned char *hex_to_ascii(int h);
+unsigned char *hex_to_ascii(unsigned int h);
 unsigned int ascii_to_hex(unsigned char *c);
 
 /// TEST FUNCTIONS ///
@@ -55,12 +55,12 @@ int main() {
 /// Helper functions
 
 // converts 1 hex digit to its ascii representation
-unsigned char hexdigit_to_ascii(int h){
+unsigned char hexdigit_to_ascii(unsigned int h){
 
     unsigned char ans = '\0';
 
     // if h is between 0x00 and 0x09, add 0x30 to get its ascii representation
-    if (h >= 0x00 && h <= 0x09)
+    if (h <= 0x09)
         ans = (unsigned char)(h + 0x30);
 
     // if h is between 0x0a and 0x0f, add 0x57 to get its (lowercase) ascii representation
@@ -70,25 +70,44 @@ unsigned char hexdigit_to_ascii(int h){
     return ans;
 }
 
-// given a 1 byte hex value, convert it to 2 ascii characters
-unsigned char *hex_to_ascii(int h){
+// given a 1-4 byte hex value, convert it to a matching ascii string
+unsigned char *hex_to_ascii(unsigned int h){
 
-    // isolate each of the two hex digits
-    int left_digit1 = h >> 4;
-    int right_digit1 = h - (left_digit1 <<4);
+    // first determine how many bytes the hex values contains (assuming that no more than 4 bytes)
+    int num_bytes = 0;
+    if (h <= 0xFF)
+        num_bytes = 1;
+    else if (h <= 0xFFFF)
+        num_bytes = 2;
+    else if (h <= 0xFFFFFF)
+        num_bytes = 3;
+    else if (h <= 0xFFFFFFFF)
+        num_bytes = 4;
 
-    // and convert them to ascii
-    unsigned char c1 = hexdigit_to_ascii(left_digit1);
-    unsigned char c2 = hexdigit_to_ascii(right_digit1);
+    // array to save result
+    unsigned char *output = (unsigned char*) malloc(num_bytes * 2);
 
-    // check for errors
-    if (c1 == '\0' || c2 == '\0')
-        return NULL;
+    unsigned int cur_digit;
+    int num_shifts;
+    unsigned char cur_digit_as_char;
+    int i;
+    for(i = 0; i < num_bytes*2; i++){
 
-    // save result in array
-    unsigned char *output = (unsigned char*) malloc(2);
-    output[0] = c1;
-    output[1] = c2;
+        // isolate the leftmost hex digit and convert it to ascii
+        num_shifts = (num_bytes*2 - i - 1) * 4;
+        cur_digit = h >> num_shifts;
+        cur_digit_as_char = hexdigit_to_ascii(cur_digit);
+
+        // make sure it was converted properly
+        if (cur_digit_as_char == '\0')
+            return NULL;
+
+        // if so, save it in output array
+        output[i] = cur_digit_as_char;
+
+        // then subtract it from the input hex value and repeat
+        h = (h - (cur_digit << num_shifts));
+    }
     return output;
 }
 
@@ -328,29 +347,30 @@ int my_utf8_decode(unsigned char *input, unsigned char *output){
             if (input[0] >= 0xc0 && input[0] < 0xe0) {
                 cur_char_len = 2;   // this char is encoded in two bytes
 
+                // here's where the utf8 decoding happens
                 unsigned char a = input[0] - 0xc0;
                 unsigned char b = input[1] - 0x80;
 
-                // result in hex: 2 hex values where each consists of 2 hex digits
                 int hex_byte1 = a >> 2;
                 int hex_byte2 = ((a << 6) + b) & 0x00ff;
 
+                // both the bytes as one int:
+                int hex_codepoint = (hex_byte1 << 8) + hex_byte2;
+
                 // convert the 2 hex bytes into 4 ascii characters
-                unsigned char *ascii1 = hex_to_ascii(hex_byte1);
-                unsigned char *ascii2 = hex_to_ascii(hex_byte2);
+                unsigned char *ascii_codepoint = hex_to_ascii(hex_codepoint);
 
+                // and copy them into the output string
                 output[j++] = 'u';
-                output[j++] = ascii1[0];
-                output[j++] = ascii1[1];
-                output[j++] = ascii2[0];
-                output[j++] = ascii2[1];
-
-                free(ascii1);
-                free(ascii2);
+                for (int i = 0; i < 4; i++){
+                    output[j++] = ascii_codepoint[i];
+                }
+                free(ascii_codepoint);
 
             } else if (input[0] >= 0xe0 && input[0] < 0xf0) {
                 cur_char_len = 3;
 
+                // here's where the utf8 decoding happens
                 // first byte of decoded string consists of last four bits in first byte of encoded string concatenated with its middle 4 bits
                 int a = (input[0] - 0xe0) << 4;
                 int b = (input[1] - 0x80);
@@ -359,21 +379,23 @@ int my_utf8_decode(unsigned char *input, unsigned char *output){
                 int hex_byte1 = a + (b >> 2);
                 int hex_byte2 = ((b << 6) + c) & 0x00ff;
 
+                // both the bytes as one int:
+                int hex_codepoint = (hex_byte1 << 8) + hex_byte2;
+
                 // convert the 2 hex bytes into 4 ascii characters
-                unsigned char *ascii1 = hex_to_ascii(hex_byte1);
-                unsigned char *ascii2 = hex_to_ascii(hex_byte2);
+                unsigned char *ascii_codepoint = hex_to_ascii(hex_codepoint);
 
+                // and copy them into the output string
                 output[j++] = 'u';
-                output[j++] = ascii1[0];
-                output[j++] = ascii1[1];
-                output[j++] = ascii2[0];
-                output[j++] = ascii2[1];
-
-                free(ascii1);
-                free(ascii2);
+                for (int i = 0; i < 4; i++){
+                    output[j++] = ascii_codepoint[i];
+                }
+                free(ascii_codepoint);
 
             } else if (input[0] >= 0xf0 && input[0] < 0xf8){
                 cur_char_len = 4;
+
+                // here's where the utf8 decoding happens
                 int a = (input[0] - 0xf0) << 2;
                 int b = (input[1] - 0x80);
                 int c = (input[2] - 0x80);
@@ -383,24 +405,19 @@ int my_utf8_decode(unsigned char *input, unsigned char *output){
                 int hex_byte2 = ((b << 4) + (c >> 2)) & 0x00ff;
                 int hex_byte3 = ((c << 6) + d) & 0x00ff;
 
+                // all the bytes as one int:
+                int hex_codepoint = (hex_byte1 << 16) + (hex_byte2 << 8) + hex_byte3;
+
                 // convert the 3 hex bytes into 6 ascii characters
-                unsigned char *ascii1 = hex_to_ascii(hex_byte1);
-                unsigned char *ascii2 = hex_to_ascii(hex_byte2);
-                unsigned char *ascii3 = hex_to_ascii(hex_byte3);
+                unsigned char *ascii_codepoint = hex_to_ascii(hex_codepoint);
 
                 output[j++] = 'U';
                 output[j++] = '0';
                 output[j++] = '0';
-                output[j++] = ascii1[0];
-                output[j++] = ascii1[1];
-                output[j++] = ascii2[0];
-                output[j++] = ascii2[1];
-                output[j++] = ascii3[0];
-                output[j++] = ascii3[1];
-
-                free(ascii1);
-                free(ascii2);
-                free(ascii3);
+                for (int i = 0; i < 6; i++){
+                    output[j++] = ascii_codepoint[i];
+                }
+                free(ascii_codepoint);
             }
         }
         input += cur_char_len;
