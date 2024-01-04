@@ -6,7 +6,7 @@
 // add end-of-string flags
 // test functions
 // add informative error messages
-// is it ok if depends on hex being lowercase? -- update to allow for uppercase
+// input that decodes to invalid codepoint
 
 
 int my_utf8_encode(unsigned char *input, unsigned char *output);
@@ -25,105 +25,51 @@ unsigned char *hex_to_ascii(int h);
 unsigned int ascii_to_hex(unsigned char *c);
 
 /// TEST FUNCTIONS ///
-
-
 void test_encode(unsigned char *input, unsigned char *output, unsigned char *expected, char *test_name);
-void testall_encode();
-void test_encode_simple(void);
-void test_encode_long_char(void);
-void test_encode_invalid_input(void);
+void testall_encode(void);
 
-// tests for decode()
-void test_decode(void);
-void test_decode_long_input(void);
-void test_decode_empty_string(void);
-void test_decode_invalid_input(void);
+void test_decode(unsigned char *input, unsigned char *output, unsigned char *expected, char *test_name);
+void testall_decode(void);
 
-// tests for strlen()
-void test_strlen_simple(void);
-void test_strlen_ascii_and_utf8(void);
-void test_strlen_invalid_input(void);
-void test_strlen_empty_string(void);
+void test_strlen(unsigned char *string, int expected);
+void testall_strlen(void);
 
-// tests for check()
-void test_check_valid(void);
-void test_check_invalid(void);
-void test_check_ascii_and_utf8(void);
+void test_check(unsigned char *string, int expected);
+void testall_check(void);
 
-// tests for charat()
-void test_charat_simple(void);
-void test_charat_empty_string(void);
-void test_charat_invalid_input(void);
-void test_charat_ascii_and_utf8(void);
+void test_charat(unsigned char *string, int index, unsigned char *expected);
+void testall_charat(void);
 
-// tests for strcmp()
-void test_strcmp_simple(void);
-void test_strcmp_ascii_and_utf8(void);
-void test_strcmp_invalid_input(void);
-void test_strcmp_matching(void);
-void test_strcmp_dif_lengths(void);
-void test_strcmp_same_lengths(void);
-void test_strcmp_empty_string(void);
+void test_strcmp(unsigned char *string1, unsigned char *string2, bool expected);
+void testall_strcmp(void);
 
-void test_strcat_simple(void);
+void test_strcat(unsigned char *dest, unsigned char *src, unsigned char *expected);
+void testall_strcat(void);
+
+void test_strreverse(unsigned char *input, unsigned char *output, unsigned char *expected);
+void testall_strreverse(void);
 
 int main() {
-
-//    char *input = "אא";
-//    unsigned char input[] = "\xF0\x90\x8D\x88" "ldfkj";
-//    unsigned char output[20];
-//    my_utf8_decode(input, output);
-
-
-//    char *string = "fds한Иאא";
-//    int check = my_utf8_check(string);
 
     unsigned char input1[] = "a\xF0\x90\x8D\x88";
     unsigned char output1[10];
     my_utf8_strreverse(input1, output1);
 
     testall_encode();
-
-    // test decode()
-    test_decode();
-    test_decode_long_input();
-    test_decode_invalid_input();
-    test_decode_empty_string();
-
-    // test strlen()
-    test_strlen_simple();
-    test_strlen_ascii_and_utf8();
-    test_strlen_invalid_input();
-    test_strlen_empty_string();
-
-    // test check()
-    test_check_valid();
-    test_check_invalid();
-    test_check_ascii_and_utf8();
-
-    // test charat()
-    test_charat_simple();
-    test_charat_empty_string();
-    test_charat_invalid_input();
-    test_charat_ascii_and_utf8();
-
-    // test strcmp()
-    test_strcmp_simple();
-    test_strcmp_ascii_and_utf8();
-    test_strcmp_invalid_input();
-    test_strcmp_matching();
-    test_strcmp_dif_lengths();
-    test_strcmp_same_lengths();
-    test_strcmp_empty_string();
-
-    test_strcat_simple();
+    testall_decode();
+    testall_strlen();
+    testall_check();
+    testall_charat();
+    testall_strcmp();
+    testall_strcat();
+    testall_strreverse();
 
     return 0;
 }
 
 /// Helper functions
 
-// converts a hex digit to its ascii representation
+// converts 1 hex digit to its ascii representation
 unsigned char hexdigit_to_ascii(int h){
 
     unsigned char ans = '\0';
@@ -179,7 +125,6 @@ int asciichar_to_hex(unsigned char c){
 
     return ans;
 }
-
 
 // given a series of ascii characters, converts them to 'matching' hex int
 unsigned int ascii_to_hex(unsigned char *c){
@@ -371,15 +316,16 @@ int my_utf8_encode(unsigned char *input, unsigned char *output)
     return 1;
 }
 
-// put in the '\u's
+// Decodes a properly encoded utf8 string into a hexadecimal universal character
 int my_utf8_decode(unsigned char *input, unsigned char *output){
 
     // first, check that the input string is a valid UTF8 encoded string
     bool invalid = my_utf8_check(input);
-    if (invalid)
+    if (invalid){
+        output = NULL;
         return 1;
+    }
 
-    unsigned char *input_address = input;      // pointer to hold onto starting address of input string
     int cur_char_len = 0;   // number of bytes that a given character takes up
     int j = 0;              // output string index counter
 
@@ -391,7 +337,7 @@ int my_utf8_decode(unsigned char *input, unsigned char *output){
             output[j++] = input[0];
         }
         else {
-            // put in \u to signify that this is a unicode codepoint
+            // put in \ (to be followed by 'u' or 'U') to signify that this is a universal character
             output[j++] = '\\';
 
             if (input[0] >= 0xc0 && input[0] < 0xe0) {
@@ -673,7 +619,7 @@ int my_utf8_strreverse(unsigned char *input, unsigned char *output){
 
 
 //////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////// TEST FUNCTIONS //////////////////////////////////////////
+///////////////////////////////////// TESTING ////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////
 
 void test_encode(unsigned char *input, unsigned char *output, unsigned char *expected, char *test_name){
@@ -707,6 +653,7 @@ void test_encode(unsigned char *input, unsigned char *output, unsigned char *exp
 // tests encode() with various test cases
 void testall_encode(){
 
+    printf("##############################################################################\n");
     printf("######################### Tests for my_utf8_encode() #########################\n");
 
     // 1. simple input
@@ -714,84 +661,66 @@ void testall_encode(){
     unsigned char output1[10];
     unsigned char expected1[] = "\u05d0\u05e8\u05d9\u05d4";
     test_encode(input1, output1, expected1, "Encode - Simple");
-    printf("\n");
 
     // 2. Range 1 codepoint
     unsigned char input2[] = "\\u0024";
     unsigned char output2[10];
     unsigned char expected2[] = "\u0024";
     test_encode(input2, output2, expected2, "Encode - Range 1 Codepoint");
-    printf("\n");
-
 
     // 3. Range 2 codepoint
     unsigned char input3[] = "\\u00A3";
     unsigned char output3[10];
     unsigned char expected3[] = "\u00A3";
     test_encode(input3, output3, expected3, "Encode - Range 2 Codepoint");
-    printf("\n");
-
 
     // 4. Range 3 codepoint
     unsigned char input4[] = "\\ud55c";
     unsigned char output4[10];
     unsigned char expected4[] = "\ud55c";
     test_encode(input4, output4, expected4, "Encode - Range 3 Codepoint");
-    printf("\n");
-
 
     // 5. Range 4 codepoint (8 digits)
     unsigned char input5[] = "\\U00010348";
     unsigned char output5[10];
     unsigned char expected5[] = "\xf0\x90\x8d\x88";
     test_encode(input5, output5, expected5, "Encode - Range 4 Codepoint");
-    printf("\n");
-
 
     // 6. invalid hex digit in codepoint
     unsigned char input6[] = "\\ug0187";
     unsigned char output6[10];
     unsigned char expected6[] = "\0";
     test_encode(input6, output6, expected6, "Encode - Non-hex in Codepoint");
-    printf("\n");
-
 
     // 7. incomplete codepoint at the start of the input string
     unsigned char input7[] = "\\u018";
     unsigned char output7[10];
     unsigned char expected7[] = "\0";
     test_encode(input7, output7, expected7, "Encode - Incomplete Codepoint at Beginning");
-    printf("\n");
-
 
     // 8. incomplete codepoint at the end of the input string
     unsigned char input8[] = "\\uabcd\\u18";
     unsigned char output8[10];
     unsigned char expected8[] = "\uabcd";
     test_encode(input8, output8, expected8, "Encode - Incomplete Codepoint at End");
-    printf("\n");
-
 
     // 9. missing '\u' before non-ascii character
     unsigned char input9[] = "€018";
     unsigned char output9[10];
     unsigned char expected9[] = "\0";
     test_encode(input9, output9, expected9, "Encode - Missing '\\u'");
-    printf("\n");
 
     // 10. codepoint in protected range (less than 0xa0 and not one of the exceptions)
     unsigned char input10[] = "\\u0035";
     unsigned char output10[10];
     unsigned char expected10[] = "\0";
     test_encode(input10, output10, expected10, "Encode - Codepoint Too Low");
-    printf("\n");
 
     // 11. codepoint in protected range (between 0xd800 and 0xdfff)
     unsigned char input11[] = "\\ud955";
     unsigned char output11[10];
     unsigned char expected11[] = "\0";
     test_encode(input11, output11, expected11, "Encode - Codepoint in Protected Range");
-    printf("\n");
 
     // 12. codepoint too large
     unsigned char input12[] = "\\Uffd55955";
@@ -800,84 +729,108 @@ void testall_encode(){
     test_encode(input12, output12, expected12, "Encode - Codepoint Too Large");
     printf("\n");
 
-    printf("##############################################################################");
+    printf("##############################################################################\n");
 }
 
 
-void test_decode(void){
+void test_decode(unsigned char *input, unsigned char *output, unsigned char *expected, char *test_name){
 
-    // test Hebrew Arieh
-    unsigned char input[] = "\xd7\x90\xd7\xa8\xd7\x99\xd7\x94";
-    unsigned char output[30];
-    my_utf8_decode(input, output);
+    bool decode_successful = my_utf8_decode(input, output);
+    bool passed = true;
 
-    // correct answer
-    unsigned char ans[] = "\\u05d0\\u05e8\\u05d9\\u05d4";
-
-    // compare output to correct answer
     int i = 0;
-    while (ans[i] != '\0'){
-        assert(output[i] == ans[i]);
+    while(output[i] != '\0' && expected[i] != '\0'){
+
+        if (output[i] != expected[i]){  // if we've found an incorrect character in the output string:
+            // take note of it
+            passed = false;
+
+            // and display error message
+            printf("***TEST FAILED: %s. ", test_name);
+            if (decode_successful == 1)
+                printf("Invalid utf8-encoded string %s dealt with incorrectly.\n", input);
+            else
+                printf("Failed to properly decode the string %s! Actual: %s, Expected: %s\n", input, output, expected);
+            }
         i++;
+    }
+    if (passed){
+        printf("***TEST PASSED: %s. ", test_name);
+        if (decode_successful == 1)
+            printf("Invalid utf8-encoded string %s dealt with correctly.\n", input);
+        else
+            printf("Successfully decoded the string %s as %s.\n", input, output);
     }
 }
 
-void test_decode_long_input(void){
-    unsigned char input[] = "abcdefg\xd7\x90" "12345678" "\xd7\xa8" "\xf0\x90\x8d\x88" "\xd7\x99\xd7\x94";
-    unsigned char output[60];
+void testall_decode(void){
+    printf("######################### Tests for my_utf8_decode() #########################\n");
 
-    my_utf8_decode(input, output);  // call decode()
+    // Hebrew Arieh
+    unsigned char input1[] = "\u05d0\u05e8\u05d9\u05d4";
+    unsigned char output1[30];
+    unsigned char expected1[] = "\\u05d0\\u05e8\\u05d9\\u05d4";
+    test_decode(input1, output1, expected1, "Decode - Simple");
 
-    // correct answer
-    char ans[] = "abcdefg\\u05d012345678\\u05e8\\U00010348\\u05d9\\u05d4";
+    // long input string
+    unsigned char input2[] = "abcdefg\xd7\x90" "12345678" "\xd7\xa8" "\xf0\x90\x8d\x88" "\xd7\x99\xd7\x94";
+    unsigned char output2[60];
+    unsigned char expected2[] = "abcdefg\\u05d012345678\\u05e8\\U00010348\\u05d9\\u05d4";
+    test_decode(input2, output2, expected2, "Decode - Long Input");
 
-    // compare output to correct answer
-    int i = 0;
-    while (ans[i] != '\0'){
-        assert(output[i] == ans[i]);
-        i++;
-    }
+    // empty input string
+    unsigned char input3[] = "";
+    unsigned char output3[5];
+    unsigned char expected3[] = "\0";
+    test_decode(input3, output3, expected3, "Decode - Empty Input");
+
+    // invalid utf8 input string
+    unsigned char input4[] = "\x01\xD0\x02";  // INVALID utf8 string
+    unsigned char output4[10];
+    unsigned char expected4[] = "\0";
+    test_decode(input4, output4, expected4, "Decode - Invalid UTF8 Input");
+
+    printf("\n");
+    printf("##############################################################################\n");
+
 }
 
-void test_decode_empty_string(void){
-    unsigned char input[] = "";
-    unsigned char output[20];
-    my_utf8_decode(input, output);
+void test_strlen(unsigned char *string, int expected){
 
-    // output should consist of only the end-of-string flag
-    assert(output[0] == '\0');
+    int actual = my_utf8_strlen(string);
+    printf("***TEST %s: string = %s, expected = %d, actual = %d\n", (actual == expected ? "PASSED" : "FAILED"), string, expected, actual);
 }
 
-void test_decode_invalid_input(void){
-    unsigned char input[] = "\x01\xD0\x02";  // INVALID utf8 string
-    unsigned char output[20];
+void testall_strlen(void){
 
-    assert(my_utf8_decode(input, output) == 1);
+    printf("######################### Tests for my_utf8_strlen() #########################\n");
+    int expected;
+
+    // Hebrew Arieh
+    unsigned char string1[] ="\u05d0\u05e8\u05d9\u05d4";
+    expected = 4;
+    test_strlen(string1, expected);
+
+    // mix of ascii and utf8 characters
+    unsigned char string2[] = "hello\xD7\x90\xD7\xA8\xD7\x99\xD7\x94" "goodbye" "\xF0\x90\x8D\x88";
+    expected = 17;
+    test_strlen(string2, expected);
+
+    // invalid utf8 input string
+    unsigned char string3[] = "\x10\x90\x8D\x88";
+    expected = 0;
+    test_strlen(string3, expected);
+
+    // empty input string
+    unsigned char string4[] = "";
+    expected = 0;
+    test_strlen(string4, expected);
+
+    printf("\n");
+    printf("##############################################################################\n");
 }
 
-/// tests for strlen()
-// test strlen() with simple input
-void test_strlen_simple(void){
-    unsigned char input[] = "\xD7\x90\xD7\xA8\xD7\x99\xD7\x94";
-    assert(my_utf8_strlen(input) == 4);
-}
 
-// test strlen() with input that's a mix of ascii and utf8 encoded characters
-void test_strlen_ascii_and_utf8(void){
-    unsigned char input[] = "hello\xD7\x90\xD7\xA8\xD7\x99\xD7\x94" "goodbye" "\xF0\x90\x8D\x88";
-    assert(my_utf8_strlen(input) == 17);
-}
-
-void test_strlen_invalid_input(void){
-    unsigned char input[] = "\x10\x90\x8D\x88";
-    assert(my_utf8_strlen(input) == 0);
-}
-void test_strlen_empty_string(void){
-    unsigned char input[] = "";
-    assert(my_utf8_strlen(input) == 0);
-}
-
-/// tests for check()
 // test that check() correctly validates valid utf8 encoded strings
 void test_check_valid(void){
     unsigned char input1[] = "\xD7\x90\xD7\xA8\xD7\x99\xD7\x94";
