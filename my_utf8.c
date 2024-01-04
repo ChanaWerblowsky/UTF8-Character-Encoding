@@ -1,9 +1,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include <assert.h>
-// end-of-string flags
-// input that decodes to invalid codepoint
+
 
 
 int my_utf8_encode(unsigned char *input, unsigned char *output);
@@ -24,33 +22,22 @@ unsigned int ascii_to_hex(unsigned char *c);
 /// TEST FUNCTIONS ///
 void test_encode(unsigned char *input, unsigned char *output, unsigned char *expected, char *test_name);
 void testall_encode(void);
-
 void test_decode(unsigned char *input, unsigned char *output, unsigned char *expected, char *test_name);
 void testall_decode(void);
-
 void test_strlen(unsigned char *string, int expected);
 void testall_strlen(void);
-
 void test_check(unsigned char *string, int expected);
 void testall_check(void);
-
 void test_charat(unsigned char *string, int index, unsigned char *expected);
 void testall_charat(void);
-
 void test_strcmp(unsigned char *string1, unsigned char *string2, bool expected);
 void testall_strcmp(void);
-
 void test_strcat(unsigned char *dest, unsigned char *src, unsigned char *expected);
 void testall_strcat(void);
-
 void test_strreverse(unsigned char *input, unsigned char *output, unsigned char *expected);
 void testall_strreverse(void);
 
 int main() {
-
-    unsigned char input1[] = "a\xF0\x90\x8D\x88";
-    unsigned char output1[10];
-    my_utf8_strreverse(input1, output1);
 
     testall_encode();
     testall_decode();
@@ -59,10 +46,11 @@ int main() {
     testall_charat();
     testall_strcmp();
     testall_strcat();
-//    testall_strreverse();
+    testall_strreverse();
 
     return 0;
 }
+
 
 /// Helper functions
 
@@ -430,7 +418,7 @@ int my_utf8_strlen(unsigned char *string)
         return 0;
 
     int length = 0;
-    int cur_char_len = 0;
+    int cur_char_len;
 
     while (*string != '\0'){
         length++;
@@ -527,7 +515,6 @@ unsigned char *my_utf8_charat(unsigned char *string, int index){
         // move to next character only if we're not already at the desired character
         if (cur_pos < index)
             string += cur_char_len;
-
         cur_pos++;
     }
 
@@ -594,8 +581,10 @@ int my_utf8_strcat(unsigned char *dest, unsigned char *src){
 int my_utf8_strreverse(unsigned char *input, unsigned char *output){
 
     int invalid = my_utf8_check(input);
-    if (invalid)
+    if (invalid){
+        *output = '\0';
         return 1;
+    }
 
     // determine length of input (total number of bytes)
     int length = 0;
@@ -604,8 +593,9 @@ int my_utf8_strreverse(unsigned char *input, unsigned char *output){
         length++;
         input_ptr++;
     }
-    // for each char, determine many bytes it takes up and put it at the leftmost available position in output
-    int cur_char_len = 0;
+
+    // for each char, determine many bytes it takes up and put it at the rightmost available position in output
+    int cur_char_len;
     int i;
     for (i = 0; i < length; i += cur_char_len){
 
@@ -619,7 +609,7 @@ int my_utf8_strreverse(unsigned char *input, unsigned char *output){
             output[output_index++] = input[i + j];
         }
     }
-    output[length] = '\0';
+    output[length] = '\0';  // end-of-string flag
     return 0;
 }
 
@@ -743,12 +733,10 @@ void testall_encode(){
     printf("##############################################################################\n");
 }
 
-
 void test_decode(unsigned char *input, unsigned char *output, unsigned char *expected, char *test_name){
 
     bool decode_successful = my_utf8_decode(input, output);
     bool passed = true;
-    printf("expected: %s actual: %s\n", expected, output);
 
     int i = 0;
     while(output[i] != '\0' && expected[i] != '\0'){
@@ -909,8 +897,8 @@ void test_charat(unsigned char *string, int index, unsigned char *expected){
     bool passed = true;
     unsigned char* actual = my_utf8_charat(string, index);
 
-    if (expected == NULL && actual == NULL){
-        printf("TEST PASSED: String = '%s', index = %d, expected = '%s', actual = '%s'\n", string, index, expected, actual);
+    if (expected == NULL){
+        printf("TEST %s: String = '%s', index = %d, expected = '%s', actual = '%s'\n", (actual == NULL ? "PASSED" : "FAILED"), string, index, expected, actual);
         return;
     }
 
@@ -1049,7 +1037,7 @@ void test_strcat(unsigned char *dest, unsigned char *src, unsigned char *expecte
 
     // check for invalid utf8 input
     if (success == 1){
-        printf("Invalid input string passed to strcat()!\n", src, dest);
+        printf("Invalid input string passed to strcat()!\n");
     }
 
     // if valid inputs, check that concatenation was done correctly
@@ -1066,7 +1054,7 @@ void test_strcat(unsigned char *dest, unsigned char *src, unsigned char *expecte
     }
     if (dest[j] != expected[j])
         passed = false;
-    printf("TEST %s: destination = %s, source = = '%s', expected = '%s', actual = '%s'\n", (passed ? "PASSED" : "FAILED"), dest_copy, src, expected, dest);
+    printf("TEST %s: destination = %s, source = '%s', expected = '%s', actual = '%s'\n", (passed ? "PASSED" : "FAILED"), dest_copy, src, expected, dest);
 }
 
 void testall_strcat(void){
@@ -1095,28 +1083,73 @@ void testall_strcat(void){
     printf("##############################################################################\n");
 }
 
-void test_strcat_simple(void){
 
-    unsigned char source[] = "that is the question";
-    unsigned char dest[] = "to utf8 or not \xED\x95\x9C ";
+void test_strreverse(unsigned char *input, unsigned char *output, unsigned char *expected){
 
-    // assert that there were no errors
-    assert(my_utf8_strcat(dest, source) == 0);
+    bool reverse_successful = my_utf8_strreverse(input, output);
+    bool passed = true;
 
-    // assert that the correct result was obtained
-    unsigned char ans[] = "to utf8 or not \xED\x95\x9C that is the question";
+    // compare actual output against expected output
     int i = 0;
-    while(ans[i] != '\0') {
-        assert(dest[i] == ans[i]);
+    while(output[i] != '\0' && expected[i] != '\0'){
+        if (output[i] != expected[i]){
+            passed = false;
+            break;
+        }
         i++;
+    }
+    if (expected[i] != output[i])
+        passed = false;
+
+    // display message
+    if (passed){
+        printf("***TEST PASSED: ");
+        if (reverse_successful == 1)
+            printf("Invalid utf8-encoded string %s dealt with correctly.\n", input);
+        else
+            printf("Reverse successful! input = '%s', actual = '%s',  expected = '%s'.\n", input, output, expected);
+    }
+    else{   // if test failed
+        printf("***TEST FAILED: ");
+        if (reverse_successful == 1)
+            printf("Invalid utf8-encoded string %s dealt with incorrectly.\n", input);
+        else
+            printf("Reverse failed! input = '%s', actual = '%s',  expected = '%s'.\n", input, output, expected);
     }
 }
 
-
-//
-//void test_strreverse(unsigned char *input, unsigned char *output, unsigned char *expected);
 void testall_strreverse(void){
     printf("######################### Tests for my_utf8_strreverse() #########################\n");
+
+    // simple ascii string
+    unsigned char input1[] = "hello";
+    unsigned char output1[6];
+    unsigned char expected1[] = "olleh";
+    test_strreverse(input1, output1, expected1);
+
+    // utf8 + ascii input
+    unsigned char input2[] = "a \u2209 B";
+    unsigned char output2[8];
+    unsigned char expected2[] = "B \u2209 a";
+    test_strreverse(input2, output2, expected2);
+
+    // invalid utf8 input
+    unsigned char input3[] = "abc \xe1\x12";
+    unsigned char output3[8];
+    unsigned char expected3[] = "\0";
+    test_strreverse(input3, output3, expected3);
+
+    // 1-character input string
+    unsigned char input4[] = "\u05d1";
+    unsigned char output4[8];
+    unsigned char expected4[] = "\u05d1";
+    test_strreverse(input4, output4, expected4);
+
+    // empty input string
+    unsigned char input5[] = "";
+    unsigned char output5[8];
+    unsigned char expected5[] = "";
+    test_strreverse(input5, output5, expected5);
 
     printf("\n");
     printf("##############################################################################\n");
