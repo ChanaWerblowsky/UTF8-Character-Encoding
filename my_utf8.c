@@ -57,8 +57,8 @@ int main() {
     testall_strlen();
     testall_check();
     testall_charat();
-//    testall_strcmp();
-//    testall_strcat();
+    testall_strcmp();
+    testall_strcat();
 //    testall_strreverse();
 
     return 0;
@@ -319,7 +319,7 @@ int my_utf8_decode(unsigned char *input, unsigned char *output){
     // first, check that the input string is a valid UTF8 encoded string
     bool invalid = my_utf8_check(input);
     if (invalid){
-        output = NULL;
+        *output = '\0';
         return 1;
     }
 
@@ -503,7 +503,7 @@ int my_utf8_check(unsigned char *string) {
     return 0;
 }
 
-// returns the utf-encoded character at the given index
+// returns the utf-encoded character at the given index, or NULL if invalid utf8 input string or invalid index
 unsigned char *my_utf8_charat(unsigned char *string, int index){
 
     // if the input string is not a valid utf8 string or the desired index is too large, return NULL
@@ -541,22 +541,32 @@ unsigned char *my_utf8_charat(unsigned char *string, int index){
     return ans;
 }
 
-// returns 0 if the utf8-encoded strings string1 and string2 are identical, and 1 otherwise
+// returns 0 if the utf8-encoded strings string1 and string2 are identical, and 1 otherwise (or if invalid input)
 int my_utf8_strcmp(unsigned char *string1, unsigned char *string2) {
 
-    while (*string1 != '\0' && *string1 == *string2) {
+    // check that both input strings are valid utf8-encoded strings
+    bool invalid1 = my_utf8_check(string1);
+    bool invalid2 = my_utf8_check(string2);
+    if (invalid1 || invalid2){
+        printf("Invalid utf8 string passed to strcmp()!\n");
+        return 1;
+    }
+
+    // check whether string1 == string2
+    while (*string1 != '\0' && *string2 != '\0' && *string1 == *string2) {
         string1++;
         string2++;
     }
 
-    // if here, either we've found a non-matching character or we've reached the end of string1
-    if (*string2 == '\0')   // if we've also reached the end of string2, string1 == string2
+    // if here, either we've found a non-matching character or we've reached the end of string1 or string2
+    if (*string1 == *string2)   // if we've reached the end of both strings, string1 == string2
         return 0;
 
     return 1;               // otherwise, string1 != string2
 }
 
 // concatenates source string to the end of the destination string if both are valid utf8 strings
+// upon encountering invalid input string, leaves the input strings as is and returns 1
 int my_utf8_strcat(unsigned char *dest, unsigned char *src){
 
     int invalid_src = my_utf8_check(src);
@@ -576,9 +586,8 @@ int my_utf8_strcat(unsigned char *dest, unsigned char *src){
         dest[i] = src[i];
         i++;
     }
-    dest[i] = '\0'; // end-of-string flag
-
-    return 0;
+    dest[i] = '\0'; // end-of-string fla
+    return 0;       // result is in dest
 }
 
 // reverses a utf8 encoded string
@@ -627,23 +636,28 @@ void test_encode(unsigned char *input, unsigned char *output, unsigned char *exp
     bool passed = true;
     while(output[i] != '\0' && expected[i] != '\0'){
         if (output[i] != expected[i]){
-            printf("***TEST FAILED: %s. ", test_name);
-            if (encode_successful == 1)
-                printf("Invalid input %s dealt with incorrectly.\n", input);
-            else
-                printf("Failed to properly encode the string %s! Actual: %s, Expected: %s\n", input, output, expected);
-
             passed = false;
             break;
         }
         i++;
     }
+    if (expected[i] != output[i])
+        passed = false;
+
     if (passed){
         printf("***TEST PASSED: %s. ", test_name);
         if (encode_successful == 1)
             printf("Invalid input %s dealt with correctly.\n", input);
         else
             printf("Successfully encoded the string %s as %s.\n", input, output);
+    }
+    else{   // if test failed
+        printf("***TEST FAILED: %s. ", test_name);
+        if (encode_successful == 1)
+            printf("Invalid input %s dealt with incorrectly.\n", input);
+        else
+            printf("Failed to properly encode the string %s! Actual: %s, Expected: %s\n", input, output, expected);
+
     }
 }
 
@@ -734,29 +748,34 @@ void test_decode(unsigned char *input, unsigned char *output, unsigned char *exp
 
     bool decode_successful = my_utf8_decode(input, output);
     bool passed = true;
+    printf("expected: %s actual: %s\n", expected, output);
 
     int i = 0;
     while(output[i] != '\0' && expected[i] != '\0'){
 
         if (output[i] != expected[i]){  // if we've found an incorrect character in the output string:
-            // take note of it
             passed = false;
-
-            // and display error message
-            printf("***TEST FAILED: %s. ", test_name);
-            if (decode_successful == 1)
-                printf("Invalid utf8-encoded string %s dealt with incorrectly.\n", input);
-            else
-                printf("Failed to properly decode the string %s! Actual: %s, Expected: %s\n", input, output, expected);
+            break;
             }
         i++;
     }
+    if (expected[i] != output[i])
+        passed = false;
+
+    // display message
     if (passed){
         printf("***TEST PASSED: %s. ", test_name);
         if (decode_successful == 1)
             printf("Invalid utf8-encoded string %s dealt with correctly.\n", input);
         else
             printf("Successfully decoded the string %s as %s.\n", input, output);
+    }
+    else{   // if test failed
+        printf("***TEST FAILED: %s. ", test_name);
+        if (decode_successful == 1)
+            printf("Invalid utf8-encoded string %s dealt with incorrectly.\n", input);
+        else
+            printf("Failed to properly decode the string %s! Actual: %s, Expected: %s\n", input, output, expected);
     }
 }
 
@@ -890,6 +909,11 @@ void test_charat(unsigned char *string, int index, unsigned char *expected){
     bool passed = true;
     unsigned char* actual = my_utf8_charat(string, index);
 
+    if (expected == NULL && actual == NULL){
+        printf("TEST PASSED: String = '%s', index = %d, expected = '%s', actual = '%s'\n", string, index, expected, actual);
+        return;
+    }
+
     int i = 0;
     while (expected[i] != '\0' && actual[i] != '\0'){
         // make sure that the values at this location in both strings match
@@ -899,9 +923,13 @@ void test_charat(unsigned char *string, int index, unsigned char *expected){
         }
         i++;
     }
+    if (expected[i] != actual[i])
+        passed = false;
+
     printf("TEST %s: String = '%s', index = %d, expected = '%s', actual = '%s'\n", (passed ? "PASSED" : "FAILED"), string, index, expected, actual);
     free(actual);
 }
+
 void testall_charat(void){
 
     printf("######################### Tests for my_utf8_charat() #########################\n");
@@ -923,19 +951,19 @@ void testall_charat(void){
     // empty input string
     unsigned char string3[] = "";
     index = 3;
-    unsigned char expected3[] = "\0";
+    unsigned char *expected3 = NULL;
     test_charat(string3, index, expected3);
 
     // invalid utf8 input string
     unsigned char string4[] = "\x99";
     index = 3;
-    unsigned char expected4[] = "\0";
+    unsigned char *expected4 = NULL;
     test_charat(string4, index, expected4);
 
     // invalid index
     unsigned char string5[] = "\U0001f613 \U0001f60f \U0001f62d";
     index = 6;
-    unsigned char expected5[] = "\0";
+    unsigned char *expected5 = NULL;
     test_charat(string5, index, expected5);
 
     // ascii and utf8-character input string
@@ -952,30 +980,120 @@ void testall_charat(void){
     printf("##############################################################################\n");
 }
 
-//void test_strcmp(unsigned char *string1, unsigned char *string2, bool expected);
-//void testall_strcmp(void);
-//
-//void test_strcat(unsigned char *dest, unsigned char *src, unsigned char *expected);
-//void testall_strcat(void);
-//
-//void test_strreverse(unsigned char *input, unsigned char *output, unsigned char *expected);
-//void testall_strreverse(void);
+void test_strcmp(unsigned char *string1, unsigned char *string2, bool expected){
 
-/// tests for strcmp()
-void test_strcmp_simple(void){
-    unsigned char string1[] = "ab\u1234";
-    unsigned char string2[] = "abc\u1234";
-    int result = my_utf8_strcmp(string1, string2);
-    assert(result == 1);
+    int actual = my_utf8_strcmp(string1, string2);
+    printf("TEST %s: String1 = '%s', String2 = '%s', expected = '%d', actual = '%d'\n", (expected == actual ? "PASSED" : "FAILED"), string1, string2, expected, actual);
+
 }
 
-void test_strcmp_ascii_and_utf8(void){}
-void test_strcmp_invalid_input(void){}
-void test_strcmp_matching(void){}
-void test_strcmp_dif_lengths(void){}
-void test_strcmp_same_lengths(void){}
-void test_strcmp_empty_string(void){}
+void testall_strcmp(void){
 
+    printf("######################### Tests for my_utf8_strcmp() #########################\n");
+    bool expected;
+
+    // Hebrew Arieh
+    unsigned char string1a[] ="\u05d0\u05e8\u05d9\u05d4";
+    unsigned char string1b[] ="\u05d0\u05e8\u05d9\u05d4";
+    expected = 0;
+    test_strcmp(string1a, string1b, expected);
+
+    // mix of ascii and utf8 characters - matching strings
+    unsigned char string2a[] = "hello!\U0001f60a goodbye\U0001f622";
+    unsigned char string2b[] = "hello!\U0001f60a goodbye\U0001f622";
+    expected = 0;
+    test_strcmp(string2a, string2b, expected);
+
+    // matching invalid utf8 input strings
+    unsigned char string3a[] = "\xd5\x14\x80";
+    unsigned char string3b[] = "\xd5\x14\x80";
+    expected = 1;
+    test_strcmp(string3a, string3b, expected);
+
+    // non-matching input strings
+    unsigned char string4a[] = "\u05d7\u05e0\u05d4";
+    unsigned char string4b[] = "Chana";
+    expected = 1;
+    test_strcmp(string4a, string4b, expected);
+
+    // one empty input string, one non-empty input string
+    unsigned char string5a[] = "\u05e9\u05dc\u05d5\u05dd";
+    unsigned char string5b[] = "";
+    expected = 1;
+    test_strcmp(string5a, string5b, expected);
+
+    // different length input strings but matching until the end of the shorter one
+    unsigned char string6a[] = "\u05e9\u05dc\u05d5\u05dd";
+    unsigned char string6b[] = "\u05e9\u05dc\u05d5\u05dd\u05e9\u05dc\u05d5\u05dd";
+    expected = 1;
+    test_strcmp(string6a, string6b, expected);
+
+    printf("\n");
+    printf("##############################################################################\n");
+}
+
+
+void test_strcat(unsigned char *dest, unsigned char *src, unsigned char *expected){
+
+    // make a copy of the original destination string for future comparison
+    unsigned char dest_copy[50];
+    int i = 0;
+    while(dest[i] != '\0'){
+        dest_copy[i] = dest[i];
+        i++;
+    }
+    dest_copy[i] = '\0';
+
+    // now actually call the strcat() function
+    bool success = my_utf8_strcat(dest, src);
+
+    // check for invalid utf8 input
+    if (success == 1){
+        printf("Invalid input string passed to strcat()!\n", src, dest);
+    }
+
+    // if valid inputs, check that concatenation was done correctly
+    bool passed = true;
+
+    // 'dest' contains the result of concatenation, so compare it against 'expected'
+    int j = 0;
+    while (dest[j] != '\0' && expected[j] != '\0'){
+        if (dest[j] != expected[j]){
+            passed = false;
+            break;
+        }
+        j++;
+    }
+    if (dest[j] != expected[j])
+        passed = false;
+    printf("TEST %s: destination = %s, source = = '%s', expected = '%s', actual = '%s'\n", (passed ? "PASSED" : "FAILED"), dest_copy, src, expected, dest);
+}
+
+void testall_strcat(void){
+    printf("######################### Tests for my_utf8_strcat() #########################\n");
+
+    // simple utf8 strings
+    unsigned char dest1[] = "\u05d0\u05e0\u05d9";
+    unsigned char src1[] = " \u05de\u05d0\u05de\u05d9\u05df";
+    unsigned char expected1[] = "\u05d0\u05e0\u05d9 \u05de\u05d0\u05de\u05d9\u05df";
+    test_strcat(dest1, src1, expected1);
+
+    // mix of ascii and utf8
+    unsigned char dest2[] = "\u05d0\u05e0\u05d9 ";
+    unsigned char src2[] = "is 'I'";
+    unsigned char expected2[] = "\u05d0\u05e0\u05d9 is 'I'";
+    test_strcat(dest2, src2, expected2);
+
+    // invalid utf8 input string
+    unsigned char dest3[] = "\u05d0\xdd ";
+    unsigned char src3[] = "hello";
+    unsigned char expected3[] = "\u05d0\xdd ";
+    test_strcat(dest3, src3, expected3);
+
+
+    printf("\n");
+    printf("##############################################################################\n");
+}
 
 void test_strcat_simple(void){
 
@@ -995,3 +1113,11 @@ void test_strcat_simple(void){
 }
 
 
+//
+//void test_strreverse(unsigned char *input, unsigned char *output, unsigned char *expected);
+void testall_strreverse(void){
+    printf("######################### Tests for my_utf8_strreverse() #########################\n");
+
+    printf("\n");
+    printf("##############################################################################\n");
+}
