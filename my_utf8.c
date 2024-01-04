@@ -3,23 +3,25 @@
 #include <stdlib.h>
 
 
-
+// utf8 encoding/decoding and related functions
 int my_utf8_encode(unsigned char *input, unsigned char *output);
 int my_utf8_decode(unsigned char *input, unsigned char *output);
 int my_utf8_strlen(unsigned char *string);
 int my_utf8_check(unsigned char *string);
-int my_utf8_check_codepoint(unsigned int codepoint);
 unsigned char *my_utf8_charat(unsigned char *string, int index);
 int my_utf8_strcmp(unsigned char *string1, unsigned char *string2);
 int my_utf8_strcat(unsigned char *dest, unsigned char *src);
 int my_utf8_strreverse(unsigned char *input, unsigned char *output);
-int my_utf8_charsize(unsigned char c);
-unsigned char hexdigit_to_ascii(unsigned int h);
-int asciichar_to_hex(unsigned char c);
-unsigned char *hex_to_ascii(unsigned int h);
-unsigned int ascii_to_hex(unsigned char *c);
 
-/// TEST FUNCTIONS ///
+// helper functions
+unsigned char hexdigit_to_ascii(unsigned int h);
+unsigned char *hex_to_ascii(unsigned int h);
+int asciichar_to_hex(unsigned char c);
+unsigned int ascii_to_hex(unsigned char *c);
+int my_utf8_charsize(unsigned char c);
+int my_utf8_check_codepoint(unsigned int codepoint);
+
+// test functions
 void test_encode(unsigned char *input, unsigned char *output, unsigned char *expected, char *test_name);
 void testall_encode(void);
 void test_decode(unsigned char *input, unsigned char *output, unsigned char *expected, char *test_name);
@@ -52,160 +54,7 @@ int main() {
 }
 
 
-/// Helper functions
-
-// converts 1 hex digit to its ascii representation
-unsigned char hexdigit_to_ascii(unsigned int h){
-
-    unsigned char ans = '\0';
-
-    // if h is between 0x00 and 0x09, add 0x30 to get its ascii representation
-    if (h <= 0x09)
-        ans = (unsigned char)(h + 0x30);
-
-    // if h is between 0x0a and 0x0f, add 0x57 to get its (lowercase) ascii representation
-    else if (h >= 0x0a && h <= 0x0f)
-        ans = (unsigned char)(h + 0x57);
-
-    return ans;
-}
-
-// given a 1-4 byte hex value, convert it to a matching ascii string
-unsigned char *hex_to_ascii(unsigned int h){
-
-    // first determine how many bytes the hex values contains (assuming that no more than 4 bytes)
-    int num_bytes = 0;
-    if (h <= 0xFF)
-        num_bytes = 1;
-    else if (h <= 0xFFFF)
-        num_bytes = 2;
-    else if (h <= 0xFFFFFF)
-        num_bytes = 3;
-    else if (h <= 0xFFFFFFFF)
-        num_bytes = 4;
-
-    // array to save result
-    unsigned char *output = (unsigned char*) malloc(num_bytes * 2);
-
-    unsigned int cur_digit;
-    int num_shifts;
-    unsigned char cur_digit_as_char;
-    int i;
-    for(i = 0; i < num_bytes*2; i++){
-
-        // isolate the leftmost hex digit and convert it to ascii
-        num_shifts = (num_bytes*2 - i - 1) * 4;
-        cur_digit = h >> num_shifts;
-        cur_digit_as_char = hexdigit_to_ascii(cur_digit);
-
-        // make sure it was converted properly
-        if (cur_digit_as_char == '\0')
-            return NULL;
-
-        // if so, save it in output array
-        output[i] = cur_digit_as_char;
-
-        // then subtract it from the input hex value and repeat
-        h = (h - (cur_digit << num_shifts));
-    }
-    return output;
-}
-
-// returns the hex value of the given ascii character
-int asciichar_to_hex(unsigned char c){
-
-    int ans = -1;   // error code (to be reset if no error)
-    if (c >= '0' && c <= '9')
-        ans = c - 0x30;
-
-    else if (c >= 'a' && c <= 'f')
-        ans = c - 0x57;
-
-    else if (c >= 'A' && c <= 'F')
-        ans = c - 0x37;
-
-    else
-        printf("Cannot convert character '%c' to hex. ", c);
-
-    return ans;
-}
-
-// given a series of ascii characters, converts them to 'matching' hex int
-unsigned int ascii_to_hex(unsigned char *c){
-
-    // length of input string:
-    int length = 0;
-    while (c[length] != '\0'){
-        length++;
-    }
-
-    // convert each char to hex, put value in array
-    int hex_vals[length];
-    int i;
-    for (i = 0; i < length; i++){
-        int h = asciichar_to_hex(c[i]); // convert this char to hex
-        if (h == -1)          // if it can't be converted to hex, return -1
-            return -1;
-
-        hex_vals[i] = h;      // otherwise, save the hex val in an array
-    }
-
-    // for each pair of hex digits, move the first hex digit 4 bits to the left and add it to the second one
-    int num_bytes = length/2;
-    int hex_bytes[num_bytes];
-    for (int j = 0; j < length; j+=2){   // we're expecting an even number of characters (either 4 or 8)
-        hex_bytes[j/2] = (hex_vals[j] << 4) + hex_vals[j+1];
-    }
-
-    // finally, combine each of the bytes into 1 hex int
-    unsigned int ans = 0;
-    int num_shifts;
-    for(int k = 0; k < num_bytes; k++){
-        num_shifts = (num_bytes - k - 1) * 8;
-        ans += hex_bytes[k] << num_shifts;
-    }
-
-    return ans;
-}
-
-
-// given the first byte of a utf8-encoded character, returns the number of bytes that it takes up, or 0 if invalid leading byte
-// assumes that the continuation bytes have been checked for validity
-int my_utf8_charsize(unsigned char c){
-
-    if (c >= 0x00 && c < 0x80)
-        return 1;
-    if (c >= 0xc0 && c < 0xe0)
-        return 2;
-    if (c >= 0xe0 && c < 0xf0)
-        return 3;
-    if (c >= 0xf0 && c < 0xf8)
-        return 4;
-    return 0;
-}
-
-int my_utf8_check_codepoint(unsigned int codepoint){
-
-    if (codepoint < 0xa0) {
-        if (codepoint != 0x0024 && codepoint != 0x0040 && codepoint != 0x0060) {
-            printf("Invalid universal character \\u%x - less than 0xa0\n", codepoint);
-            return 1;
-        }
-        else
-            return 0;
-    }
-    if (codepoint >= 0xd800 && codepoint <= 0xdfff) {
-        printf("Invalid universal character \\u%x - between U+d800 and U+dfff\n", codepoint);
-        return 1;
-    }
-    if (codepoint > 0x10ffff){
-        printf("Invalid universal character \\u%x - greater than U+10ffff\n", codepoint);
-        return 1;
-    }
-    return 0;
-}
-
-// encodes the given unicode codepoint in UTF8
+// Encodes the given unicode codepoint as a UTF8 character
 // if an invalid character or codepoint is encountered, the output string is terminated there
 int my_utf8_encode(unsigned char *input, unsigned char *output)
 {
@@ -426,7 +275,7 @@ int my_utf8_decode(unsigned char *input, unsigned char *output){
     return 0;
 }
 
-// returns the number of utf8 encoded characters in the string
+// Returns the number of utf8 encoded characters (including ascii characters) in the string
 // returns 0 if string is empty or invalid utf8
 int my_utf8_strlen(unsigned char *string)
 {
@@ -437,6 +286,7 @@ int my_utf8_strlen(unsigned char *string)
     int length = 0;
     int cur_char_len;
 
+    // loop through the input string, step-size determined by the size of the character
     while (*string != '\0'){
         length++;
 
@@ -447,7 +297,7 @@ int my_utf8_strlen(unsigned char *string)
     return length;
 }
 
-// returns 0 if the input string is a valid utf8-encoded string, and 1 otherwise
+// Returns 0 if the input string is a valid utf8-encoded string, and 1 otherwise
 int my_utf8_check(unsigned char *string) {
 
     // first determine the number of bytes in the input string
@@ -508,7 +358,7 @@ int my_utf8_check(unsigned char *string) {
     return 0;
 }
 
-// returns the utf-encoded character at the given index, or NULL if invalid utf8 input string or invalid index
+// Returns the utf-encoded character at the given index, or NULL if invalid utf8 input string or invalid index
 unsigned char *my_utf8_charat(unsigned char *string, int index){
 
     // if the input string is not a valid utf8 string or the desired index is too large, return NULL
@@ -545,7 +395,7 @@ unsigned char *my_utf8_charat(unsigned char *string, int index){
     return ans;
 }
 
-// returns 0 if the utf8-encoded strings string1 and string2 are identical, and 1 otherwise (or if invalid input)
+// Returns 0 if the utf8-encoded string1 and string2 are identical, and 1 otherwise (or if invalid input)
 int my_utf8_strcmp(unsigned char *string1, unsigned char *string2) {
 
     // check that both input strings are valid utf8-encoded strings
@@ -569,7 +419,7 @@ int my_utf8_strcmp(unsigned char *string1, unsigned char *string2) {
     return 1;               // otherwise, string1 != string2
 }
 
-// concatenates source string to the end of the destination string if both are valid utf8 strings
+// Concatenates source string to the end of the destination string if both are valid utf8 strings
 // upon encountering invalid input string, leaves the input strings as is and returns 1
 int my_utf8_strcat(unsigned char *dest, unsigned char *src){
 
@@ -590,11 +440,11 @@ int my_utf8_strcat(unsigned char *dest, unsigned char *src){
         dest[i] = src[i];
         i++;
     }
-    dest[i] = '\0'; // end-of-string fla
+    dest[i] = '\0'; // end-of-string flag
     return 0;       // result is in dest
 }
 
-// reverses a utf8 encoded string
+// Reverses a utf8 encoded string
 int my_utf8_strreverse(unsigned char *input, unsigned char *output){
 
     int invalid = my_utf8_check(input);
@@ -627,6 +477,159 @@ int my_utf8_strreverse(unsigned char *input, unsigned char *output){
         }
     }
     output[length] = '\0';  // end-of-string flag
+    return 0;
+}
+
+
+/// Helper functions
+// converts 1 hex digit to its ascii representation
+unsigned char hexdigit_to_ascii(unsigned int h){
+
+    unsigned char ans = '\0';
+
+    // if h is between 0x00 and 0x09, add 0x30 to get its ascii representation
+    if (h <= 0x09)
+        ans = (unsigned char)(h + 0x30);
+
+        // if h is between 0x0a and 0x0f, add 0x57 to get its (lowercase) ascii representation
+    else if (h >= 0x0a && h <= 0x0f)
+        ans = (unsigned char)(h + 0x57);
+
+    return ans;
+}
+
+// given a 1-4 byte hex value, convert it to a matching ascii string
+unsigned char *hex_to_ascii(unsigned int h){
+
+    // first determine how many bytes the hex values contains (assuming that no more than 4 bytes)
+    int num_bytes = 0;
+    if (h <= 0xFF)
+        num_bytes = 1;
+    else if (h <= 0xFFFF)
+        num_bytes = 2;
+    else if (h <= 0xFFFFFF)
+        num_bytes = 3;
+    else if (h <= 0xFFFFFFFF)
+        num_bytes = 4;
+
+    // array to save result
+    unsigned char *output = (unsigned char*) malloc(num_bytes * 2);
+
+    unsigned int cur_digit;
+    int num_shifts;
+    unsigned char cur_digit_as_char;
+    int i;
+    for(i = 0; i < num_bytes*2; i++){
+
+        // isolate the leftmost hex digit and convert it to ascii
+        num_shifts = (num_bytes*2 - i - 1) * 4;
+        cur_digit = h >> num_shifts;
+        cur_digit_as_char = hexdigit_to_ascii(cur_digit);
+
+        // make sure it was converted properly
+        if (cur_digit_as_char == '\0')
+            return NULL;
+
+        // if so, save it in output array
+        output[i] = cur_digit_as_char;
+
+        // then subtract it from the input hex value and repeat
+        h = (h - (cur_digit << num_shifts));
+    }
+    return output;
+}
+
+// returns the hex value of the given ascii character
+int asciichar_to_hex(unsigned char c){
+
+    int ans = -1;   // error code (to be reset if no error)
+    if (c >= '0' && c <= '9')
+        ans = c - 0x30;
+
+    else if (c >= 'a' && c <= 'f')
+        ans = c - 0x57;
+
+    else if (c >= 'A' && c <= 'F')
+        ans = c - 0x37;
+
+    else
+        printf("Cannot convert character '%c' to hex. ", c);
+
+    return ans;
+}
+
+// given a series (an even number) of ascii characters, converts them to 'matching' hex int
+unsigned int ascii_to_hex(unsigned char *c){
+
+    // length of input string:
+    int length = 0;
+    while (c[length] != '\0'){
+        length++;
+    }
+
+    // convert each char to hex, put value in array
+    int hex_vals[length];
+    int i;
+    for (i = 0; i < length; i++){
+        int h = asciichar_to_hex(c[i]); // convert this char to hex
+        if (h == -1)          // if it can't be converted to hex, return -1
+            return -1;
+
+        hex_vals[i] = h;      // otherwise, save the hex val in an array
+    }
+
+    // for each pair of hex digits, move the first hex digit 4 bits to the left and add it to the second one
+    int num_bytes = length/2;
+    int hex_bytes[num_bytes];
+    for (int j = 0; j < length; j+=2){   // we're expecting an even number of characters (either 4 or 8)
+        hex_bytes[j/2] = (hex_vals[j] << 4) + hex_vals[j+1];
+    }
+
+    // finally, combine each of the bytes into 1 hex int
+    unsigned int ans = 0;
+    int num_shifts;
+    for(int k = 0; k < num_bytes; k++){
+        num_shifts = (num_bytes - k - 1) * 8;
+        ans += hex_bytes[k] << num_shifts;
+    }
+    return ans;
+}
+
+
+// given the first byte of a utf8-encoded character, returns the number of bytes that it takes up, or 0 if invalid leading byte
+// assumes that the continuation bytes have been checked for validity
+int my_utf8_charsize(unsigned char c){
+
+    if (c >= 0x00 && c < 0x80)
+        return 1;
+    if (c >= 0xc0 && c < 0xe0)
+        return 2;
+    if (c >= 0xe0 && c < 0xf0)
+        return 3;
+    if (c >= 0xf0 && c < 0xf8)
+        return 4;
+    return 0;
+}
+
+// returns 0 if the given codepoint is a valid universal character and 1 otherwise
+int my_utf8_check_codepoint(unsigned int codepoint){
+
+    if (codepoint < 0xa0) {
+        if (codepoint != 0x0024 && codepoint != 0x0040 && codepoint != 0x0060) {
+            printf("Invalid universal character \\u%x - less than 0xa0\n", codepoint);
+            return 1;
+        }
+        else
+            return 0;
+    }
+    if (codepoint >= 0xd800 && codepoint <= 0xdfff) {
+        printf("Invalid universal character \\u%x - between U+d800 and U+dfff\n", codepoint);
+        return 1;
+    }
+    if (codepoint > 0x10ffff){
+        printf("Invalid universal character \\u%x - greater than U+10ffff\n", codepoint);
+        return 1;
+    }
     return 0;
 }
 
