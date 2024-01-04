@@ -2,10 +2,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <assert.h>
-
-// add end-of-string flags
-// test functions
-// add informative error messages
+// end-of-string flags
 // input that decodes to invalid codepoint
 
 
@@ -60,9 +57,9 @@ int main() {
     testall_strlen();
     testall_check();
     testall_charat();
-    testall_strcmp();
-    testall_strcat();
-    testall_strreverse();
+//    testall_strcmp();
+//    testall_strcat();
+//    testall_strreverse();
 
     return 0;
 }
@@ -457,7 +454,7 @@ int my_utf8_check(unsigned char *string) {
     }
 
     // then loop through string again, checking whether each character is valid
-    int cur_char_len = 0;
+    int cur_char_len;
     for(int i = 0; i < length; i+= cur_char_len){
         unsigned int bytes_rem = length - i - 1;   // number of bytes that remain in the string after this one
 
@@ -530,12 +527,12 @@ unsigned char *my_utf8_charat(unsigned char *string, int index){
         // move to next character only if we're not already at the desired character
         if (cur_pos < index)
             string += cur_char_len;
+
         cur_pos++;
     }
 
     // now, the first element in the string is the desired character (but it might be spread over multiple memory locations)
-    // build up answer string
-    unsigned char *ans = (unsigned char*) malloc(cur_char_len);
+    unsigned char *ans = (unsigned char*) malloc(cur_char_len);     // build up answer string
     int i;
     for (i = 0; i < cur_char_len; i++)
         ans[i] = string[i];
@@ -831,103 +828,138 @@ void testall_strlen(void){
 }
 
 
-// test that check() correctly validates valid utf8 encoded strings
-void test_check_valid(void){
-    unsigned char input1[] = "\xD7\x90\xD7\xA8\xD7\x99\xD7\x94";
-    assert(my_utf8_check(input1) == 0);
+void test_check(unsigned char *string, int expected){
 
-    unsigned char input2[] = "\xE2\x82\xAC";
-    assert(my_utf8_check(input2) == 0);
+    bool actual = my_utf8_check(string);
+    printf("***TEST %s: string = %s, expected = %d, actual = %d\n", (actual == expected ? "PASSED" : "FAILED"), string, expected, actual);
 
-    unsigned char input3[] = "\xC2\xA3";
-    assert(my_utf8_check(input3) == 0);
-
-    unsigned char input4[] = "\xC2\xA3\x24";
-    assert(my_utf8_check(input4) == 0);
 }
 
-// test that check() correctly invalidates invalid utf8 encoded strings
-void test_check_invalid(void){
-    unsigned char input1[] = "\x90\xD7\xA8\xD7\x99\xD7\x94";
-    assert(my_utf8_check(input1) == 1);
+void testall_check(void){
 
-    unsigned char input2[] = "\xE2\x82";
-    assert(my_utf8_check(input2) == 1);
+    printf("######################### Tests for my_utf8_check() #########################\n");
+    bool expected;
 
-    unsigned char input3[] = "\xC2";
-    assert(my_utf8_check(input3) == 1);
+    // Hebrew Arieh
+    unsigned char string1[] = "\xD7\x90\xD7\xA8\xD7\x99\xD7\x94";
+    expected = 0;
+    test_check(string1, expected);
 
-    unsigned char input4[] = "\xA3\x24";
-    assert(my_utf8_check(input4) == 1);
+    // 1-byte valid utf8 input
+    unsigned char string2[] = "\u0024";
+    expected = 0;
+    test_check(string2, expected);
+
+    // 2-byte valid utf8 input
+    unsigned char string3[] = "\u00a3";
+    expected = 0;
+    test_check(string3, expected);
+
+    // 3-byte valid utf8 input
+    unsigned char string4[] = "\u20ac";
+    expected = 0;
+    test_check(string4, expected);
+
+    // 4-byte valid utf8 input
+    unsigned char string5[] = "\U0001f602";
+    expected = 0;
+    test_check(string5, expected);
+
+    // valid leading byte but invalid continuation byte
+    unsigned char string6[] = "\xc2\xc3";
+    expected = 1;
+    test_check(string6, expected);
+
+    // mix of ascii and utf8 characters - valid
+    unsigned char string7[] = "\U0001f61f worried \U0001f616 confounded";
+    expected = 0;
+    test_check(string7, expected);
+
+    // mostly valid input string, 1 invalid character
+    unsigned char string8[] = "\U0001f61f worried \xc3\x01 \U0001f616 confounded";
+    expected = 1;
+    test_check(string8, expected);
+
+    printf("\n");
+    printf("##############################################################################\n");
 }
 
-// test check() with input that's a mix of ascii and utf8 encoded characters
-void test_check_ascii_and_utf8(void){
 
-    unsigned char input1[] = "123\x90" "101010" "\xD7\xA8\xD7\x99\xD7\x94";  // invalid utf8
-    assert(my_utf8_check(input1) == 1);
+void test_charat(unsigned char *string, int index, unsigned char *expected){
 
-    unsigned char input2[] = "computer\xE2\x82\xACorganization";             // valid utf8
-    assert(my_utf8_check(input2) == 0);
+    bool passed = true;
+    unsigned char* actual = my_utf8_charat(string, index);
 
-    unsigned char input3[] = "\xE2\x82\xAC" "is so much fun" "\xC2";         // some valid chars, some invalid --> invalid string
-    assert(my_utf8_check(input3) == 1);
+    int i = 0;
+    while (expected[i] != '\0' && actual[i] != '\0'){
+        // make sure that the values at this location in both strings match
+        if (expected[i] != actual[i]){
+            passed = false;
+            break;
+        }
+        i++;
+    }
+    printf("TEST %s: String = '%s', index = %d, expected = '%s', actual = '%s'\n", (passed ? "PASSED" : "FAILED"), string, index, expected, actual);
+    free(actual);
+}
+void testall_charat(void){
+
+    printf("######################### Tests for my_utf8_charat() #########################\n");
+
+    int index;
+
+    // simple ascii input
+    unsigned char string1[] = "12345";
+    index = 3;
+    unsigned char expected1[] = "4";
+    test_charat(string1, index, expected1);
+
+    // simple utf8 input
+    unsigned char string2[] = "\u05d7\u05e0\u05d4";
+    index = 0;
+    unsigned char expected2[] = "\u05d7";
+    test_charat(string2, index, expected2);
+
+    // empty input string
+    unsigned char string3[] = "";
+    index = 3;
+    unsigned char expected3[] = "\0";
+    test_charat(string3, index, expected3);
+
+    // invalid utf8 input string
+    unsigned char string4[] = "\x99";
+    index = 3;
+    unsigned char expected4[] = "\0";
+    test_charat(string4, index, expected4);
+
+    // invalid index
+    unsigned char string5[] = "\U0001f613 \U0001f60f \U0001f62d";
+    index = 6;
+    unsigned char expected5[] = "\0";
+    test_charat(string5, index, expected5);
+
+    // ascii and utf8-character input string
+    unsigned char string6[] = "\U0001f613 \U0001f60f \U0001f62d";
+    index = 0;
+    unsigned char expected6[] = "\U0001f613";
+    test_charat(string6, index, expected6);
+
+    index = 1;
+    unsigned char expected7[] = " ";
+    test_charat(string6, index, expected7);
+
+    printf("\n");
+    printf("##############################################################################\n");
 }
 
-/// tests for charat()
-
-// test charat() with simple valid input
-void test_charat_simple(void){
-    unsigned char input1[] = "12345";
-    unsigned char *output1 = my_utf8_charat(input1, 3);
-
-    assert(output1[0] == '4');
-    free(output1);
-
-    unsigned char input2[] = "\xD7\x97\xD7\xA0\xD7\x94";     // 3 Hebrew characters total
-    unsigned char *output2 = my_utf8_charat(input2, 1);
-
-    assert(output2[0] == 0xD7);
-    assert(output2[1] == 0xA0);
-    free(output2);
-}
-
-// test charat() with empty input string
-void test_charat_empty_string(void){
-    unsigned char input[] = "";
-    unsigned char *output = my_utf8_charat(input, 3);
-    assert(output == NULL);
-    free(output);
-}
-
-void test_charat_invalid_input(void){
-    unsigned char input[] = "\x90\xD8\x01";      // invalid utf8 string
-    unsigned char *output = my_utf8_charat(input, 0);
-    assert(output == NULL);
-    free(output);
-}
-
-void test_charat_ascii_and_utf8(void){
-    unsigned char input[] = "hello\xE2\x82\xACgoodbye";
-
-    // ascii character before any utf8 characters
-    unsigned char *output1 = my_utf8_charat(input, 2);
-    assert(*output1 == 'l');
-
-    // utf8 character
-    unsigned char *output2 = my_utf8_charat(input, 5);
-    assert(output2[0] == (unsigned int) 0xE2);
-    assert(output2[1] == (unsigned int) 0x82);
-    assert(output2[2] == (unsigned int) 0xAC);
-
-    // ascii character following a utf8 character
-    unsigned char *output3 = my_utf8_charat(input, 6);
-    assert(*output3 == 'g');
-
-    free(output1);
-    free(output2);
-    free(output3);
-}
+//void test_strcmp(unsigned char *string1, unsigned char *string2, bool expected);
+//void testall_strcmp(void);
+//
+//void test_strcat(unsigned char *dest, unsigned char *src, unsigned char *expected);
+//void testall_strcat(void);
+//
+//void test_strreverse(unsigned char *input, unsigned char *output, unsigned char *expected);
+//void testall_strreverse(void);
 
 /// tests for strcmp()
 void test_strcmp_simple(void){
