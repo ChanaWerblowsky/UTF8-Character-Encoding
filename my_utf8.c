@@ -71,6 +71,7 @@ int my_utf8_encode(unsigned char *input, unsigned char *output)
             else if (input[1] == 'U')
                 num_digits = 8;
 
+            // if there's no 'u' or 'U' following, just copy the backslash (an ascii char) into output
             else{
                 output[j++] = input[0];
                 input++;
@@ -128,7 +129,7 @@ int my_utf8_encode(unsigned char *input, unsigned char *output)
                     output[j++] = 0xc0 + ((left_byte << 2) + (right_byte >> 6));
                     output[j++] = 0x80 + (right_byte & 0x3f);
                 }
-                else if (codepoint <= 0xffff) {  // if within invalid range
+                else if (codepoint <= 0xffff) {
                     output[j++] = 0xe0 + (left_byte >> 4);
                     output[j++] = 0x80 + ((left_byte & 0x0f) << 2) + (right_byte >> 6);
                     output[j++] = 0x80 + (right_byte & 0x3f);
@@ -758,6 +759,12 @@ void testall_encode(){
     unsigned char output13[10];
     unsigned char expected13[] = "\\abcdefg\\";
     test_encode(input13, output13, expected13, "Encode - Literal Backslash");
+
+    // 14. my name
+    unsigned char input14[] = "\\u05d7\\u05e0\\u05d4";
+    unsigned char output14[10];
+    unsigned char expected14[] = "\u05d7\u05e0\u05d4";
+    test_encode(input14, output14, expected14, "Encode - My Name");
     printf("\n");
 
     printf("##############################################################################\n");
