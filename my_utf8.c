@@ -64,91 +64,95 @@ int my_utf8_encode(unsigned char *input, unsigned char *output)
 
         if (input[0] == '\\') {
 
-            int num_digits = 0;
+            int num_digits;
             if (input[1] == 'u')
                 num_digits = 4;
 
             else if (input[1] == 'U')
                 num_digits = 8;
 
-            // if we're at a \u or \U:
-            if (num_digits != 0) {
-
-                // make sure there are at least 4 or at least 8 characters following
-                bool enough_chars = true;
-                for (int i = 2; i < num_digits+2; i++)
-                    if (input[i] == '\0')
-                        enough_chars = false;
-                if (!enough_chars){
-                    success = false;
-                    printf("Fewer than %d characters following escape sequence '\\%c'!\n", num_digits, input[1]);
-                    break;
-                }
-
-                // if there are enough characters following:
-                // create a string consisting of the following 4 or 8 characters
-                unsigned char codepoint_str[num_digits+1];
-                int i;
-                for (i = 0; i < num_digits; i++){
-                    codepoint_str[i] = input[i + 2];
-                }
-                codepoint_str[i] = '\0';
-
-                // convert the string into a 'matching' int
-                unsigned int codepoint = ascii_to_hex(codepoint_str);
-
-                // if invalid character following the \u, terminate the output string
-                if (codepoint == -1){
-                    success = false;
-                    printf("Invalid character following \\%c!\n", input[1]);
-                    break;
-                }
-
-                // check that the codepoint is within a valid range
-                bool invalid_codepoint = my_utf8_check_codepoint(codepoint);
-                if (invalid_codepoint){
-                    success = false;
-                    break;
-                }
-
-                if (num_digits == 4){
-                    // determine in which range this codepoint lies; apply correct encoding algorithm:
-                    unsigned int left_byte = codepoint >> 8;     // isolate the two hex bytes
-                    unsigned int right_byte = codepoint & 0x00ff;
-
-                    // if less than U+00a0, only U+0024, U+0040, and U+0060 are valid
-                    if (codepoint <= 0x007f) {
-                        output[j++] = right_byte;
-                    }
-                    else if (codepoint <= 0x07ff) {
-                        output[j++] = 0xc0 + ((left_byte << 2) + (right_byte >> 6));
-                        output[j++] = 0x80 + (right_byte & 0x3f);
-                    }
-                    else if (codepoint <= 0xffff) {  // if within invalid range
-                        output[j++] = 0xe0 + (left_byte >> 4);
-                        output[j++] = 0x80 + ((left_byte & 0x0f) << 2) + (right_byte >> 6);
-                        output[j++] = 0x80 + (right_byte & 0x3f);
-                    }
-                }
-
-                else {  // num_digits == 8
-                    unsigned int left_byte = codepoint >> 16;
-                    unsigned int mid_byte = (codepoint >> 8) & 0x0000ff;
-                    unsigned int right_byte = codepoint & 0x0000ff;
-
-                    if (codepoint >= 0x10000 && codepoint <= 0x10ffff) {
-                        output[j++] = 0xf0 + (left_byte >> 2);
-                        output[j++] = 0x80 + ((left_byte << 4) + (mid_byte >> 4));
-                        output[j++] = 0x80 + ((mid_byte << 2) & 0x3f) + (right_byte >> 6);
-                        output[j++] = 0x80 + (right_byte & 0x3f);
-                    }
-                }
-
-                // move to next character in input string
-                input += num_digits+2;
+            else{
+                output[j++] = input[0];
+                input++;
+                continue;
             }
+
+            // If we're at a \u or \U:
+            // make sure there are at least 4 or at least 8 characters following
+            bool enough_chars = true;
+            for (int i = 2; i < num_digits+2; i++)
+                if (input[i] == '\0')
+                    enough_chars = false;
+            if (!enough_chars){
+                success = false;
+                printf("Fewer than %d characters following escape sequence '\\%c'!\n", num_digits, input[1]);
+                break;
+            }
+
+            // if there are enough characters following:
+            // create a string consisting of the following 4 or 8 characters
+            unsigned char codepoint_str[num_digits+1];
+            int i;
+            for (i = 0; i < num_digits; i++){
+                codepoint_str[i] = input[i + 2];
+            }
+            codepoint_str[i] = '\0';
+
+            // convert the string into a 'matching' int
+            unsigned int codepoint = ascii_to_hex(codepoint_str);
+
+            // if invalid character following the \u, terminate the output string
+            if (codepoint == -1){
+                success = false;
+                printf("Invalid character following \\%c!\n", input[1]);
+                break;
+            }
+
+            // check that the codepoint is within a valid range
+            bool invalid_codepoint = my_utf8_check_codepoint(codepoint);
+            if (invalid_codepoint){
+                success = false;
+                break;
+            }
+
+            if (num_digits == 4){
+                // determine in which range this codepoint lies; apply correct encoding algorithm:
+                unsigned int left_byte = codepoint >> 8;     // isolate the two hex bytes
+                unsigned int right_byte = codepoint & 0x00ff;
+
+                // if less than U+00a0, only U+0024, U+0040, and U+0060 are valid
+                if (codepoint <= 0x007f) {
+                    output[j++] = right_byte;
+                }
+                else if (codepoint <= 0x07ff) {
+                    output[j++] = 0xc0 + ((left_byte << 2) + (right_byte >> 6));
+                    output[j++] = 0x80 + (right_byte & 0x3f);
+                }
+                else if (codepoint <= 0xffff) {  // if within invalid range
+                    output[j++] = 0xe0 + (left_byte >> 4);
+                    output[j++] = 0x80 + ((left_byte & 0x0f) << 2) + (right_byte >> 6);
+                    output[j++] = 0x80 + (right_byte & 0x3f);
+                }
+            }
+
+            else {  // num_digits == 8
+                unsigned int left_byte = codepoint >> 16;
+                unsigned int mid_byte = (codepoint >> 8) & 0x0000ff;
+                unsigned int right_byte = codepoint & 0x0000ff;
+
+                if (codepoint >= 0x10000 && codepoint <= 0x10ffff) {
+                    output[j++] = 0xf0 + (left_byte >> 2);
+                    output[j++] = 0x80 + ((left_byte << 4) + (mid_byte >> 4));
+                    output[j++] = 0x80 + ((mid_byte << 2) & 0x3f) + (right_byte >> 6);
+                    output[j++] = 0x80 + (right_byte & 0x3f);
+                }
+            }
+
+            // move to next character in input string
+            input += num_digits+2;
         }
-        // if here we're not at a '\u' or '\U'
+
+        // if here we're not at a '\', '\u' or '\U'
         // if the current char is an ascii character:
         else if (input[0] >= 0 && input[0] <= 127){
             output[j++] = input[0];
@@ -748,6 +752,12 @@ void testall_encode(){
     unsigned char output12[10];
     unsigned char expected12[] = "\0";
     test_encode(input12, output12, expected12, "Encode - Codepoint Too Large");
+
+    // 13. backslash without 'u' or 'U'
+    unsigned char input13[] = "\\abcdefg\\";
+    unsigned char output13[10];
+    unsigned char expected13[] = "\\abcdefg\\";
+    test_encode(input13, output13, expected13, "Encode - Literal Backslash");
     printf("\n");
 
     printf("##############################################################################\n");
